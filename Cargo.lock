@@ -118,6 +118,7 @@ dependencies = [
  "assert_cmd",
  "audiowaveform",
  "clap",
+ "hound",
  "image",
  "predicates",
  "tempfile",

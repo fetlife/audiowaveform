@@ -7,7 +7,7 @@ use std::io::Cursor;
 use audiowaveform::{PcmAudio, write_pcm_as_wav};
 
 #[cfg(feature = "decode")]
-use self::support::{assert_bytes_eq, fixture_path, named_temp_file};
+use self::support::{assert_wav_file_matches_fixture, fixture_path, named_temp_file};
 
 #[test]
 fn writes_empty_wav_header_for_empty_pcm() {
@@ -48,8 +48,7 @@ fn transcodes_audio_to_expected_wav_fixture() {
     )
     .expect("transcode wav");
 
-    assert_bytes_eq(
-        &std::fs::read(output.path()).expect("read wav"),
-        "test_file_mono_converted.wav",
-    );
+    // MP3 decode can differ by a least-significant bit across platforms, so
+    // compare the decoded PCM stream semantically instead of byte-for-byte.
+    assert_wav_file_matches_fixture(output.path(), "test_file_mono_converted.wav", 1);
 }

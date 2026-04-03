@@ -4,8 +4,8 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 
 use self::support::{
-    assert_png_bytes_match_fixture, assert_png_file_matches_fixture, fixture_path, named_temp_file,
-    read_fixture,
+    assert_png_bytes_match_fixture, assert_png_file_matches_fixture,
+    assert_wav_file_matches_fixture, fixture_path, named_temp_file, read_fixture,
 };
 
 #[test]
@@ -190,10 +190,7 @@ fn transcodes_audio_to_wav_output() {
         .success()
         .stderr("Done\n");
 
-    assert_eq!(
-        std::fs::read(output.path()).expect("read wav"),
-        read_fixture("test_file_mono_converted.wav")
-    );
+    assert_wav_file_matches_fixture(output.path(), "test_file_mono_converted.wav", 1);
 }
 
 #[test]
