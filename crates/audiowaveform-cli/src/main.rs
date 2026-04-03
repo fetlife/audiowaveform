@@ -11,114 +11,161 @@ use audiowaveform::{
     generate_waveform_from_raw_reader, generate_waveform_from_reader, write_pcm_as_wav,
     write_waveform_png,
 };
-use clap::{CommandFactory, Parser};
+use clap::builder::styling::{AnsiColor, Styles};
+use clap::{CommandFactory, Parser, ValueEnum};
+
+const CLI_STYLES: Styles = Styles::styled()
+    .header(AnsiColor::Cyan.on_default().bold())
+    .usage(AnsiColor::Cyan.on_default().bold().underline())
+    .literal(AnsiColor::Blue.on_default().bold())
+    .placeholder(AnsiColor::Yellow.on_default())
+    .error(AnsiColor::Red.on_default().bold())
+    .valid(AnsiColor::Green.on_default())
+    .invalid(AnsiColor::Magenta.on_default().bold())
+    .context(AnsiColor::BrightBlack.on_default().dimmed())
+    .context_value(AnsiColor::Yellow.on_default().italic());
 
 #[derive(Debug, Parser)]
 #[command(
     name = "audiowaveform",
     disable_version_flag = true,
-    disable_help_flag = true
+    disable_help_flag = true,
+    styles = CLI_STYLES
 )]
+/// Generate waveform data and images from audio.
 struct Cli {
+    /// Show help information.
     #[arg(long = "help")]
     help: bool,
 
+    /// Show version information.
     #[arg(short = 'v', long = "version")]
     version: bool,
 
+    /// Disable progress and information messages.
     #[arg(short = 'q', long = "quiet")]
     quiet: bool,
 
+    /// Read input from a file or `-` for stdin.
     #[arg(short = 'i', long = "input-filename")]
     input_filename: Option<String>,
 
+    /// Write output to a file or `-` for stdout.
     #[arg(short = 'o', long = "output-filename")]
     output_filename: Option<String>,
 
+    /// Preserve channels instead of mixing to mono.
     #[arg(long = "split-channels")]
     split_channels: bool,
 
-    #[arg(long = "input-format")]
-    input_format: Option<String>,
+    /// Override input format detection.
+    #[arg(long = "input-format", value_enum)]
+    input_format: Option<CliFormat>,
 
-    #[arg(long = "output-format")]
-    output_format: Option<String>,
+    /// Override output format detection.
+    #[arg(long = "output-format", value_enum)]
+    output_format: Option<CliFormat>,
 
+    /// Use a fixed number of samples per pixel or `auto`.
     #[arg(short = 'z', long = "zoom")]
     zoom: Option<String>,
 
+    /// Set zoom using pixels per second.
     #[arg(long = "pixels-per-second")]
     pixels_per_second: Option<i32>,
 
+    /// Set waveform output bit depth.
     #[arg(short = 'b', long = "bits")]
     bits: Option<i32>,
 
+    /// Start rendering at a time offset in seconds.
     #[arg(short = 's', long = "start", default_value_t = 0.0)]
     start: f64,
 
+    /// Fit the output width to the given end time.
     #[arg(short = 'e', long = "end")]
     end: Option<f64>,
 
+    /// Set image width in pixels.
     #[arg(short = 'w', long = "width", default_value_t = 800)]
     width: i32,
 
+    /// Set image height in pixels.
     #[arg(short = 'h', long = "height", default_value_t = 250)]
     height: i32,
 
-    #[arg(short = 'c', long = "colors", default_value = "audacity")]
-    color_scheme: String,
+    /// Choose a built-in color scheme.
+    #[arg(short = 'c', long = "colors", value_enum, default_value = "audacity")]
+    color_scheme: CliColorScheme,
 
+    /// Override the border color using `rrggbb[aa]`.
     #[arg(long = "border-color")]
     border_color: Option<String>,
 
+    /// Override the background color using `rrggbb[aa]`.
     #[arg(long = "background-color")]
     background_color: Option<String>,
 
+    /// Set one or more waveform colors using `rrggbb[aa]`.
     #[arg(long = "waveform-color")]
     waveform_color: Option<String>,
 
-    #[arg(long = "waveform-style", default_value = "normal")]
-    waveform_style: String,
+    /// Render as lines or grouped bars.
+    #[arg(long = "waveform-style", value_enum, default_value = "normal")]
+    waveform_style: CliWaveformStyle,
 
+    /// Set bar width in pixels.
     #[arg(long = "bar-width", default_value_t = 8)]
     bar_width: i32,
 
+    /// Set gap between bars in pixels.
     #[arg(long = "bar-gap", default_value_t = 4)]
     bar_gap: i32,
 
-    #[arg(long = "bar-style", default_value = "square")]
-    bar_style: String,
+    /// Set the bar end-cap style.
+    #[arg(long = "bar-style", value_enum, default_value = "square")]
+    bar_style: CliBarStyle,
 
+    /// Override the axis label color using `rrggbb[aa]`.
     #[arg(long = "axis-label-color")]
     axis_label_color: Option<String>,
 
+    /// Hide time axis labels.
     #[arg(long = "no-axis-labels")]
     no_axis_labels: bool,
 
+    /// Show time axis labels.
     #[arg(long = "with-axis-labels")]
     with_axis_labels: bool,
 
+    /// Scale amplitude or use `auto`.
     #[arg(long = "amplitude-scale", default_value = "1.0")]
     amplitude_scale: String,
 
+    /// Set PNG compression level from `-1` to `9`.
     #[arg(long = "compression", default_value_t = -1)]
     compression: i32,
 
+    /// Set raw input sample rate in Hz.
     #[arg(long = "raw-samplerate")]
     raw_sample_rate: Option<i32>,
 
+    /// Set raw input channel count.
     #[arg(long = "raw-channels")]
     raw_channels: Option<i32>,
 
-    #[arg(long = "raw-format")]
-    raw_format: Option<String>,
+    /// Set raw input sample format.
+    #[arg(long = "raw-format", value_enum)]
+    raw_format: Option<CliRawSampleFormat>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 enum CliFormat {
     Mp3,
+    #[value(alias = "w64")]
     Wav,
     Flac,
+    #[value(alias = "oga")]
     Ogg,
     Opus,
     Raw,
@@ -129,8 +176,12 @@ enum CliFormat {
 }
 
 impl CliFormat {
-    fn from_name(name: &str) -> Result<Self, String> {
-        match name.to_ascii_lowercase().as_str() {
+    fn from_path(path: &str) -> Result<Self, String> {
+        let extension = Path::new(path)
+            .extension()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| format!("Unknown file format: {path}"))?;
+        match extension.to_ascii_lowercase().as_str() {
             "mp3" => Ok(Self::Mp3),
             "wav" | "w64" => Ok(Self::Wav),
             "flac" => Ok(Self::Flac),
@@ -141,16 +192,8 @@ impl CliFormat {
             "json" => Ok(Self::Json),
             "txt" => Ok(Self::Txt),
             "png" => Ok(Self::Png),
-            _ => Err(format!("Unknown file format: {name}")),
+            _ => Err(format!("Unknown file format: {path}")),
         }
-    }
-
-    fn from_path(path: &str) -> Result<Self, String> {
-        let extension = Path::new(path)
-            .extension()
-            .and_then(|value| value.to_str())
-            .ok_or_else(|| format!("Unknown file format: {path}"))?;
-        Self::from_name(extension)
     }
 
     fn is_audio_input(self) -> bool {
@@ -201,6 +244,89 @@ impl CliFormat {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum CliColorScheme {
+    Audacity,
+    Audition,
+}
+
+impl CliColorScheme {
+    fn into_library(self) -> ColorScheme {
+        match self {
+            Self::Audacity => ColorScheme::Audacity,
+            Self::Audition => ColorScheme::Audition,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum CliWaveformStyle {
+    Normal,
+    Bars,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum CliBarStyle {
+    Square,
+    Rounded,
+}
+
+impl CliBarStyle {
+    fn into_library(self) -> BarStyle {
+        match self {
+            Self::Square => BarStyle::Square,
+            Self::Rounded => BarStyle::Rounded,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum CliRawSampleFormat {
+    #[value(name = "s8")]
+    S8,
+    #[value(name = "u8")]
+    U8,
+    #[value(name = "s16le")]
+    S16Le,
+    #[value(name = "s16be")]
+    S16Be,
+    #[value(name = "s24le")]
+    S24Le,
+    #[value(name = "s24be")]
+    S24Be,
+    #[value(name = "s32le")]
+    S32Le,
+    #[value(name = "s32be")]
+    S32Be,
+    #[value(name = "f32le")]
+    F32Le,
+    #[value(name = "f32be")]
+    F32Be,
+    #[value(name = "f64le")]
+    F64Le,
+    #[value(name = "f64be")]
+    F64Be,
+}
+
+impl CliRawSampleFormat {
+    fn into_library(self) -> RawSampleFormat {
+        match self {
+            Self::S8 => RawSampleFormat::S8,
+            Self::U8 => RawSampleFormat::U8,
+            Self::S16Le => RawSampleFormat::S16Le,
+            Self::S16Be => RawSampleFormat::S16Be,
+            Self::S24Le => RawSampleFormat::S24Le,
+            Self::S24Be => RawSampleFormat::S24Be,
+            Self::S32Le => RawSampleFormat::S32Le,
+            Self::S32Be => RawSampleFormat::S32Be,
+            Self::F32Le => RawSampleFormat::F32Le,
+            Self::F32Be => RawSampleFormat::F32Be,
+            Self::F64Le => RawSampleFormat::F64Le,
+            Self::F64Be => RawSampleFormat::F64Be,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum ParsedAmplitudeScale {
     Fixed(f64),
@@ -247,16 +373,8 @@ fn run(cli: Cli) -> Result<(), String> {
     if cli.height < 1 {
         return Err("Invalid image height: minimum 1".to_string());
     }
-    let input_format = resolve_format(
-        cli.input_filename.as_deref(),
-        cli.input_format.as_deref(),
-        true,
-    )?;
-    let output_format = resolve_format(
-        cli.output_filename.as_deref(),
-        cli.output_format.as_deref(),
-        false,
-    )?;
+    let input_format = resolve_format(cli.input_filename.as_deref(), cli.input_format, true)?;
+    let output_format = resolve_format(cli.output_filename.as_deref(), cli.output_format, false)?;
     let bits = resolve_bits(cli.bits)?;
     let compression = resolve_compression(cli.compression)?;
     let amplitude = parse_amplitude_scale(&cli.amplitude_scale)?;
@@ -397,11 +515,11 @@ fn run(cli: Cli) -> Result<(), String> {
 
 fn resolve_format(
     filename: Option<&str>,
-    explicit: Option<&str>,
+    explicit: Option<CliFormat>,
     input: bool,
 ) -> Result<CliFormat, String> {
     if let Some(explicit) = explicit {
-        return CliFormat::from_name(explicit);
+        return Ok(explicit);
     }
     if let Some(filename) = filename {
         return CliFormat::from_path(filename);
@@ -488,9 +606,7 @@ fn resolve_scale(cli: &Cli) -> Result<ScaleSpec, String> {
 }
 
 fn resolve_colors(cli: &Cli) -> Result<WaveformColors, String> {
-    let mut colors = ColorScheme::from_str(&cli.color_scheme)
-        .map_err(stringify_error)?
-        .palette();
+    let mut colors = cli.color_scheme.into_library().palette();
 
     if let Some(value) = &cli.border_color {
         colors.border = Color::from_str(value).map_err(stringify_error)?;
@@ -515,27 +631,21 @@ fn resolve_colors(cli: &Cli) -> Result<WaveformColors, String> {
 }
 
 fn resolve_render_style(cli: &Cli) -> Result<RenderStyle, String> {
-    match cli.waveform_style.as_str() {
-        "normal" => Ok(RenderStyle::Normal),
-        "bars" => {
+    match cli.waveform_style {
+        CliWaveformStyle::Normal => Ok(RenderStyle::Normal),
+        CliWaveformStyle::Bars => {
             if cli.bar_width < 1 {
                 return Err("Invalid bar width: minimum 1".to_string());
             }
             if cli.bar_gap < 0 {
                 return Err("Invalid bar gap: minimum 0".to_string());
             }
-            let style = match cli.bar_style.as_str() {
-                "square" => BarStyle::Square,
-                "rounded" => BarStyle::Rounded,
-                value => return Err(format!("Unknown waveform bar style: {value}")),
-            };
             Ok(RenderStyle::Bars {
                 width: cli.bar_width as u32,
                 gap: cli.bar_gap as u32,
-                style,
+                style: cli.bar_style.into_library(),
             })
         }
-        value => Err(format!("Unknown waveform style: {value}")),
     }
 }
 
@@ -548,7 +658,7 @@ fn resolve_raw_audio_config(cli: &Cli) -> Result<RawAudioConfig, String> {
         .ok_or_else(|| "Error: Missing --raw-channels option".to_string())?;
     let sample_format = cli
         .raw_format
-        .as_deref()
+        .map(CliRawSampleFormat::into_library)
         .ok_or_else(|| "Error: Missing --raw-format option".to_string())?;
     if sample_rate <= 0 {
         return Err("Invalid input sample rate: must be greater than zero".to_string());
@@ -557,7 +667,6 @@ fn resolve_raw_audio_config(cli: &Cli) -> Result<RawAudioConfig, String> {
         return Err("Invalid number of input channels: must be greater than zero".to_string());
     }
 
-    let sample_format = RawSampleFormat::from_str(sample_format).map_err(stringify_error)?;
     RawAudioConfig::new(sample_rate as u32, channels as u16, sample_format).map_err(stringify_error)
 }
 
