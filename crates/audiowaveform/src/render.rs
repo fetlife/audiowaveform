@@ -517,9 +517,21 @@ fn draw_text(image: &mut RgbaImage, x: i32, y: i32, text: &str, color: Rgba<u8>)
 }
 
 fn draw_glyph(image: &mut RgbaImage, x: i32, y: i32, character: char, color: Rgba<u8>) {
-    let glyph = match character {
+    let glyph = glyph_bitmap(character);
+
+    for (row, bits) in glyph.iter().enumerate() {
+        for column in 0..LABEL_FONT_WIDTH {
+            if bits & (1 << (LABEL_FONT_WIDTH - 1 - column)) != 0 {
+                put_pixel(image, x + column, y + row as i32, color);
+            }
+        }
+    }
+}
+
+fn glyph_bitmap(character: char) -> [u8; LABEL_FONT_HEIGHT as usize] {
+    match character {
         '0' => [0x1E, 0x21, 0x21, 0x23, 0x25, 0x29, 0x31, 0x21, 0x21, 0x1E],
-        '1' => [0x0C, 0x1C, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C, 0x3F],
+        '1' => [0x08, 0x18, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x1C],
         '2' => [0x1E, 0x21, 0x01, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x3F],
         '3' => [0x1E, 0x21, 0x01, 0x01, 0x0E, 0x01, 0x01, 0x01, 0x21, 0x1E],
         '4' => [0x06, 0x0A, 0x12, 0x22, 0x3F, 0x02, 0x02, 0x02, 0x02, 0x02],
@@ -530,14 +542,6 @@ fn draw_glyph(image: &mut RgbaImage, x: i32, y: i32, character: char, color: Rgb
         '9' => [0x1E, 0x21, 0x21, 0x21, 0x1F, 0x01, 0x01, 0x01, 0x02, 0x1C],
         ':' => [0x00, 0x00, 0x0C, 0x0C, 0x00, 0x00, 0x0C, 0x0C, 0x00, 0x00],
         _ => [0x00; LABEL_FONT_HEIGHT as usize],
-    };
-
-    for (row, bits) in glyph.iter().enumerate() {
-        for column in 0..LABEL_FONT_WIDTH {
-            if bits & (1 << (LABEL_FONT_WIDTH - 1 - column)) != 0 {
-                put_pixel(image, x + column, y + row as i32, color);
-            }
-        }
     }
 }
 
@@ -591,3 +595,16 @@ const LABEL_FONT_WIDTH: i32 = 6;
 const LABEL_FONT_HEIGHT: i32 = 10;
 const LABEL_FONT_TRACKING: i32 = 1;
 const LABEL_FONT_ADVANCE: i32 = LABEL_FONT_WIDTH + LABEL_FONT_TRACKING;
+
+#[cfg(test)]
+mod tests {
+    use super::glyph_bitmap;
+
+    #[test]
+    fn one_glyph_uses_a_thin_stem() {
+        assert_eq!(
+            glyph_bitmap('1'),
+            [0x08, 0x18, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x1C]
+        );
+    }
+}
