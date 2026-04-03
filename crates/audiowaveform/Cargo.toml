@@ -1,0 +1,27 @@
+[package]
+name = "audiowaveform"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Audio waveform generation, serialization, rendering, and transcoding library"
+
+[features]
+default = ["decode", "render", "wav"]
+decode = ["dep:symphonia"]
+render = ["dep:image", "dep:png"]
+wav = ["dep:hound"]
+
+[dependencies]
+byteorder.workspace = true
+hound = { workspace = true, optional = true }
+image = { workspace = true, optional = true }
+png = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+symphonia = { workspace = true, optional = true }
+thiserror.workspace = true
+
+[dev-dependencies]
+image.workspace = true

@@ -1,0 +1,16 @@
+[package]
+name = "audiowaveform-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Command-line interface for the Rust audiowaveform library"
+
+[[bin]]
+name = "audiowaveform"
+path = "src/main.rs"
+
+[dependencies]
+audiowaveform = { path = "../audiowaveform" }
+clap.workspace = true

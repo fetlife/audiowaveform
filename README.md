@@ -25,6 +25,8 @@ samples produces one pair of minimum and maximum points in the output.
 
 - [Installation](#installation)
 - [Building from source](#building-from-source)
+- [Rust Library](#rust-library)
+- [Rust CLI](#rust-cli)
 - [Usage](#usage)
 - [Data Formats](#data-formats)
 - [Credits](#credits)
@@ -218,6 +220,68 @@ in the Google Test FAQ, download the source and unzip:
     mkdir build
     cd build
     cmake ..
+
+## Rust Library
+
+This repository now also contains a first-class Rust workspace built around the
+`audiowaveform` library crate and a thin `audiowaveform` CLI crate.
+
+Build the Rust workspace with:
+
+    cargo build
+
+Generate waveform data from an audio file:
+
+```rust
+use audiowaveform::{GenerateOptions, WaveformFormat, generate_waveform_from_path};
+
+let waveform = generate_waveform_from_path("input.mp3", &GenerateOptions::default())?;
+waveform.save_to_path("output.dat", Some(WaveformFormat::Dat))?;
+# Ok::<(), audiowaveform::Error>(())
+```
+
+Render a PNG from a stored waveform:
+
+```rust
+# #[cfg(feature = "render")]
+# {
+use std::fs::File;
+
+use audiowaveform::{RenderOptions, Waveform, write_waveform_png};
+
+let waveform = Waveform::load_from_path("input.dat", None)?;
+write_waveform_png(&waveform, &RenderOptions::default(), File::create("output.png")?)?;
+# }
+# Ok::<(), audiowaveform::Error>(())
+```
+
+Generate waveform data from in-memory PCM:
+
+```rust
+use audiowaveform::{GenerateOptions, PcmAudio, generate_waveform_from_pcm};
+
+let pcm = PcmAudio::new(48_000, 1, vec![0_i16; 48_000])?;
+let waveform = generate_waveform_from_pcm(&pcm, &GenerateOptions::default())?;
+assert!(!waveform.is_empty());
+# Ok::<(), audiowaveform::Error>(())
+```
+
+Additional library examples live in [`crates/audiowaveform/examples`](crates/audiowaveform/examples).
+
+## Rust CLI
+
+The Rust CLI builds from the same workspace and keeps the familiar
+`audiowaveform` command name:
+
+    cargo run -p audiowaveform-cli -- -i input.wav -o output.dat
+
+Render a PNG:
+
+    cargo run -p audiowaveform-cli -- -i input.dat -o output.png -w 1000 -h 200
+
+Generate JSON waveform data:
+
+    cargo run -p audiowaveform-cli -- -i input.mp3 -o output.json -z 128 -b 8
     make
 
 The default build type is Release. To build in Debug mode add
