@@ -1,10 +1,18 @@
 # audiowaveform
 
-[![CI](https://github.com/bbc/audiowaveform/actions/workflows/rust.yml/badge.svg)](https://github.com/bbc/audiowaveform/actions/workflows/rust.yml)
+[![CI](https://github.com/fetlife/audiowaveform/actions/workflows/rust.yml/badge.svg)](https://github.com/fetlife/audiowaveform/actions/workflows/rust.yml)
 
 `audiowaveform` is a Rust library and CLI for generating waveform data from audio,
 serializing waveform files, rendering PNG waveform images, and transcoding audio
 to PCM16 WAV.
+
+This repository is the canonical home of the Rust rewrite:
+[github.com/fetlife/audiowaveform](https://github.com/fetlife/audiowaveform).
+
+It is a Rust rewrite of the original BBC `audiowaveform` project:
+[github.com/bbc/audiowaveform](https://github.com/bbc/audiowaveform).
+The original project was created by Chris Needham and contributors at BBC
+Research & Development.
 
 The repository contains a Rust-only workspace:
 
