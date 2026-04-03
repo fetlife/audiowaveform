@@ -110,3 +110,47 @@ impl FromStr for WaveformFormat {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{AudioFormat, WaveformFormat};
+
+    #[test]
+    fn infers_audio_formats_from_extensions_and_paths() {
+        assert_eq!(AudioFormat::from_extension("mp3"), Some(AudioFormat::Mp3));
+        assert_eq!(AudioFormat::from_extension("w64"), Some(AudioFormat::Wav));
+        assert_eq!(AudioFormat::from_extension("oga"), Some(AudioFormat::Ogg));
+        assert_eq!(AudioFormat::from_path("clip.flac"), Some(AudioFormat::Flac));
+        assert_eq!(AudioFormat::from_path("clip.opus"), Some(AudioFormat::Opus));
+        assert_eq!(AudioFormat::from_extension("unknown"), None);
+    }
+
+    #[test]
+    fn parses_audio_format_strings() {
+        assert_eq!("wav".parse::<AudioFormat>().expect("wav"), AudioFormat::Wav);
+        assert_eq!("oga".parse::<AudioFormat>().expect("oga"), AudioFormat::Ogg);
+
+        let error = "aac".parse::<AudioFormat>().expect_err("unsupported");
+        assert_eq!(error.to_string(), "Unsupported format: aac");
+    }
+
+    #[test]
+    fn infers_and_parses_waveform_formats() {
+        assert_eq!(
+            WaveformFormat::from_extension("dat"),
+            Some(WaveformFormat::Dat)
+        );
+        assert_eq!(
+            WaveformFormat::from_path("waveform.json"),
+            Some(WaveformFormat::Json)
+        );
+        assert_eq!(
+            "txt".parse::<WaveformFormat>().expect("txt"),
+            WaveformFormat::Txt
+        );
+        assert_eq!(WaveformFormat::from_extension("png"), None);
+
+        let error = "csv".parse::<WaveformFormat>().expect_err("unsupported");
+        assert_eq!(error.to_string(), "Unsupported format: csv");
+    }
+}

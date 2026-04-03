@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{BufReader, BufWriter, ErrorKind, Read, Write};
 use std::path::Path;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
@@ -440,12 +440,21 @@ impl Waveform {
         let mut data = Vec::with_capacity(length * usize::from(channels) * 2);
         if bits == 8 {
             for _ in 0..length * usize::from(channels) {
-                data.push(i16::from(reader.read_i8()?) * 256);
-                data.push(i16::from(reader.read_i8()?) * 256);
+                let Some(min_value) = read_optional_i8(&mut reader)? else {
+                    break;
+                };
+                let Some(max_value) = read_optional_i8(&mut reader)? else {
+                    break;
+                };
+                data.push(i16::from(min_value) * 256);
+                data.push(i16::from(max_value) * 256);
             }
         } else {
             for _ in 0..length * usize::from(channels) * 2 {
-                data.push(reader.read_i16::<LittleEndian>()?);
+                let Some(value) = read_optional_i16(&mut reader)? else {
+                    break;
+                };
+                data.push(value);
             }
         }
         Self::from_interleaved_samples(sample_rate, samples_per_pixel, channels, data, bits)
@@ -566,6 +575,22 @@ fn clamp_scaled(value: i32, multiplier: f64) -> i16 {
     scaled as i16
 }
 
+fn read_optional_i8<R: Read>(reader: &mut R) -> Result<Option<i8>, Error> {
+    match reader.read_i8() {
+        Ok(value) => Ok(Some(value)),
+        Err(error) if error.kind() == ErrorKind::UnexpectedEof => Ok(None),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn read_optional_i16<R: Read>(reader: &mut R) -> Result<Option<i16>, Error> {
+    match reader.read_i16::<LittleEndian>() {
+        Ok(value) => Ok(Some(value)),
+        Err(error) if error.kind() == ErrorKind::UnexpectedEof => Ok(None),
+        Err(error) => Err(error.into()),
+    }
+}
+
 fn sample_at_pixel(index: usize, samples_per_pixel: u32) -> usize {
     index * samples_per_pixel as usize
 }
@@ -580,4 +605,161 @@ fn flush_resampled_frame(waveform: &mut Waveform, min: &[i16], max: &[i16]) -> R
         })
         .collect::<Vec<_>>();
     waveform.push_frame(&points)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AmplitudeScale, Waveform, WaveformFormat, WaveformPoint};
+    use crate::audio::ScaleSpec;
+
+    fn sample_waveform() -> Waveform {
+        let mut waveform = Waveform::new(48_000, 64, 1).expect("waveform");
+        waveform
+            .push_frame(&[WaveformPoint { min: -10, max: 20 }])
+            .expect("first frame");
+        waveform
+            .push_frame(&[WaveformPoint { min: -30, max: 40 }])
+            .expect("second frame");
+        waveform
+    }
+
+    #[test]
+    fn validates_waveform_metadata_and_frame_shapes() {
+        let error = Waveform::new(0, 64, 1).expect_err("invalid sample rate");
+        assert_eq!(error.to_string(), "Invalid sample rate: minimum 1 Hz");
+
+        let error = Waveform::new(48_000, 1, 1).expect_err("invalid scale");
+        assert_eq!(error.to_string(), "Invalid samples per pixel: minimum 2");
+
+        let error = Waveform::new(48_000, 64, 25).expect_err("invalid channels");
+        assert_eq!(
+            error.to_string(),
+            "Invalid channels: must be between 1 and 24"
+        );
+
+        let error = Waveform::from_interleaved_samples(48_000, 64, 2, vec![1, 2, 3], 16)
+            .expect_err("unaligned waveform data");
+        assert_eq!(
+            error.to_string(),
+            "Waveform data length must be divisible by two samples per channel"
+        );
+
+        let mut waveform = Waveform::new(48_000, 64, 2).expect("waveform");
+        let error = waveform
+            .push_frame(&[WaveformPoint { min: 0, max: 1 }])
+            .expect_err("wrong frame width");
+        assert_eq!(error.to_string(), "Expected 2 points, received 1");
+    }
+
+    #[test]
+    fn scales_waveform_amplitude_using_fixed_and_auto_modes() {
+        let waveform = sample_waveform();
+
+        let fixed = waveform
+            .scale_amplitude(AmplitudeScale::Fixed(2.0))
+            .expect("scale fixed");
+        assert_eq!(
+            fixed.point(0, 0).expect("scaled point"),
+            WaveformPoint { min: -20, max: 40 }
+        );
+
+        let auto = waveform
+            .scale_amplitude(AmplitudeScale::Auto)
+            .expect("scale auto");
+        assert_eq!(
+            auto.point(0, 1).expect("auto point"),
+            WaveformPoint {
+                min: -32_767,
+                max: 32_767,
+            }
+        );
+
+        let error = waveform
+            .scale_amplitude(AmplitudeScale::Fixed(-1.0))
+            .expect_err("negative scale");
+        assert_eq!(
+            error.to_string(),
+            "Invalid amplitude scale: must be a positive number"
+        );
+    }
+
+    #[test]
+    fn resamples_waveforms_to_a_coarser_scale() {
+        let mut waveform = Waveform::new(48_000, 512, 1).expect("waveform");
+        for point in [
+            WaveformPoint { min: 0, max: 0 },
+            WaveformPoint { min: -10, max: 10 },
+            WaveformPoint { min: 0, max: 0 },
+            WaveformPoint { min: -5, max: 7 },
+            WaveformPoint { min: -5, max: 7 },
+            WaveformPoint { min: 0, max: 0 },
+            WaveformPoint { min: 0, max: 0 },
+            WaveformPoint { min: 0, max: 0 },
+            WaveformPoint { min: 0, max: 0 },
+            WaveformPoint { min: -2, max: 2 },
+        ] {
+            waveform.push_frame(&[point]).expect("push point");
+        }
+
+        let resampled = waveform
+            .resample(ScaleSpec::SamplesPerPixel(1024))
+            .expect("resample waveform");
+        assert_eq!(resampled.len(), 5);
+        assert_eq!(resampled.samples_per_pixel(), 1024);
+        assert_eq!(
+            resampled.point(0, 0).expect("point 0"),
+            WaveformPoint { min: -10, max: 10 }
+        );
+        assert_eq!(
+            resampled.point(0, 1).expect("point 1"),
+            WaveformPoint { min: -5, max: 7 }
+        );
+        assert_eq!(
+            resampled.point(0, 2).expect("point 2"),
+            WaveformPoint { min: -5, max: 7 }
+        );
+        assert_eq!(
+            resampled.point(0, 3).expect("point 3"),
+            WaveformPoint { min: 0, max: 0 }
+        );
+        assert_eq!(
+            resampled.point(0, 4).expect("point 4"),
+            WaveformPoint { min: -2, max: 2 }
+        );
+
+        let error = waveform
+            .resample(ScaleSpec::SamplesPerPixel(256))
+            .expect_err("finer zoom should fail");
+        assert_eq!(error.to_string(), "Invalid zoom, minimum: 512");
+    }
+
+    #[test]
+    fn serializes_text_and_json_for_two_channel_waveforms() {
+        let waveform = Waveform::from_interleaved_samples(
+            44_100,
+            256,
+            2,
+            vec![-1024, 1024, -2048, 2048, -3072, 3072, -4096, 4096],
+            16,
+        )
+        .expect("waveform");
+
+        let mut txt = Vec::new();
+        waveform
+            .write_to_writer(&mut txt, WaveformFormat::Txt, Some(8))
+            .expect("write txt");
+        assert_eq!(
+            String::from_utf8(txt).expect("utf8"),
+            "-4,4,-8,8\n-12,12,-16,16\n"
+        );
+
+        let mut json = Vec::new();
+        waveform
+            .write_to_writer(&mut json, WaveformFormat::Json, Some(16))
+            .expect("write json");
+        assert_eq!(
+            String::from_utf8(json).expect("utf8"),
+            "{\"version\":2,\"channels\":2,\"sample_rate\":44100,\"samples_per_pixel\":256,\"bits\":16,\"length\":2,\"data\":[-1024,1024,-2048,2048,-3072,3072,-4096,4096]}\n"
+        );
+    }
 }

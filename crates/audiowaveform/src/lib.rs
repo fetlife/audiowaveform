@@ -11,10 +11,13 @@
 //! Generate waveform data from an audio file:
 //!
 //! ```no_run
+//! # #[cfg(feature = "decode")]
+//! # {
 //! use audiowaveform::{GenerateOptions, Waveform, generate_waveform_from_path};
 //!
 //! let waveform = generate_waveform_from_path("input.mp3", &GenerateOptions::default())?;
 //! waveform.save_to_path("output.dat", None)?;
+//! # }
 //! # Ok::<(), audiowaveform::Error>(())
 //! ```
 //!

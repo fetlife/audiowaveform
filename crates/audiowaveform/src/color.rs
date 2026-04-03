@@ -149,3 +149,53 @@ impl Default for WaveformColors {
         Self::audacity()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::{Color, ColorScheme, WaveformColors};
+
+    #[test]
+    fn parses_rgb_and_rgba_colors() {
+        assert_eq!(
+            Color::from_str("123456").expect("rgb"),
+            Color::rgba(0x12, 0x34, 0x56, 0xff)
+        );
+        assert_eq!(
+            Color::from_str("abcdef80").expect("rgba"),
+            Color::rgba(0xab, 0xcd, 0xef, 0x80)
+        );
+        assert_eq!(
+            Color::from_str("A1B2C3").expect("uppercase"),
+            Color::rgba(0xa1, 0xb2, 0xc3, 0xff)
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_color_strings() {
+        for value in ["", "12345", "gggggg", "123456789"] {
+            let error = Color::from_str(value).expect_err("invalid color");
+            assert_eq!(error.to_string(), "Invalid color value");
+        }
+    }
+
+    #[test]
+    fn parses_color_schemes_and_detects_alpha() {
+        assert_eq!(
+            ColorScheme::from_str("audacity").expect("audacity"),
+            ColorScheme::Audacity
+        );
+        assert_eq!(
+            ColorScheme::from_str("AUDITION").expect("audition"),
+            ColorScheme::Audition
+        );
+        let error = ColorScheme::from_str("unknown").expect_err("unknown scheme");
+        assert_eq!(error.to_string(), "Unknown color scheme: unknown");
+
+        let mut colors = WaveformColors::default();
+        assert!(!colors.has_alpha());
+        colors.background = Color::rgba(0, 0, 0, 128);
+        assert!(colors.has_alpha());
+    }
+}

@@ -1,9 +1,13 @@
+#[cfg(feature = "decode")]
 use std::fs::File;
-use std::io::{Read, Seek};
+use std::io::Read;
+#[cfg(feature = "decode")]
+use std::io::Seek;
+#[cfg(feature = "decode")]
 use std::path::Path;
 
 #[cfg(feature = "decode")]
-use symphonia::core::audio::SampleBuffer;
+use symphonia::core::audio::{AudioBufferRef, SampleBuffer, Signal};
 #[cfg(feature = "decode")]
 use symphonia::core::codecs::DecoderOptions;
 #[cfg(feature = "decode")]
@@ -19,7 +23,9 @@ use symphonia::core::probe::Hint;
 #[cfg(feature = "decode")]
 use symphonia::default::{get_codecs, get_probe};
 
-use crate::{AmplitudeScale, AudioFormat, Error, Waveform, WaveformPoint};
+#[cfg(feature = "decode")]
+use crate::AudioFormat;
+use crate::{AmplitudeScale, Error, Waveform, WaveformPoint};
 
 #[cfg(feature = "decode")]
 struct ReadSeekMediaSource<R> {
@@ -565,6 +571,7 @@ pub(crate) fn decode_audio_reader<R: Read + Seek + Send + Sync + 'static>(
         .channels
         .ok_or(Error::MissingMetadata { name: "channels" })?
         .count() as u16;
+    let encoder_delay = codec_params.delay.unwrap_or(0) as usize;
     let mut decoder = get_codecs().make(codec_params, &DecoderOptions::default())?;
 
     let mut samples = Vec::new();
@@ -590,11 +597,287 @@ pub(crate) fn decode_audio_reader<R: Read + Seek + Send + Sync + 'static>(
             Err(error) => return Err(error.into()),
         };
 
-        let spec = *decoded.spec();
-        let mut sample_buffer = SampleBuffer::<i16>::new(decoded.capacity() as u64, spec);
-        sample_buffer.copy_interleaved_ref(decoded);
-        samples.extend_from_slice(sample_buffer.samples());
+        match decoded {
+            AudioBufferRef::F32(buffer) => {
+                extend_interleaved_f32_samples(buffer.as_ref(), &mut samples);
+            }
+            AudioBufferRef::F64(buffer) => {
+                extend_interleaved_f64_samples(buffer.as_ref(), &mut samples);
+            }
+            _ => {
+                let spec = *decoded.spec();
+                let mut sample_buffer = SampleBuffer::<i16>::new(decoded.capacity() as u64, spec);
+                sample_buffer.copy_interleaved_ref(decoded);
+                samples.extend_from_slice(sample_buffer.samples());
+            }
+        }
+    }
+
+    if encoder_delay > 0 {
+        let samples_to_skip = encoder_delay.saturating_mul(usize::from(channels));
+        if samples_to_skip < samples.len() {
+            samples.drain(..samples_to_skip);
+        } else {
+            samples.clear();
+        }
     }
 
     PcmAudio::new(sample_rate, channels, samples)
+}
+
+#[cfg(feature = "decode")]
+fn extend_interleaved_f32_samples(
+    buffer: &symphonia::core::audio::AudioBuffer<f32>,
+    samples: &mut Vec<i16>,
+) {
+    let channels = buffer.spec().channels.count();
+    for frame in 0..buffer.frames() {
+        for channel in 0..channels {
+            let sample = buffer.chan(channel)[frame];
+            samples.push(clamp_float_to_i16(f64::from(sample) * f64::from(i16::MAX)));
+        }
+    }
+}
+
+#[cfg(feature = "decode")]
+fn extend_interleaved_f64_samples(
+    buffer: &symphonia::core::audio::AudioBuffer<f64>,
+    samples: &mut Vec<i16>,
+) {
+    let channels = buffer.spec().channels.count();
+    for frame in 0..buffer.frames() {
+        for channel in 0..channels {
+            let sample = buffer.chan(channel)[frame];
+            samples.push(clamp_float_to_i16(sample * f64::from(i16::MAX)));
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::{
+        GenerateOptions, PcmAudio, RawAudioConfig, RawSampleFormat, ScaleSpec,
+        generate_waveform_from_pcm, parse_raw_audio, parse_raw_sample,
+    };
+    use crate::{AmplitudeScale, WaveformPoint};
+
+    #[test]
+    fn validates_pcm_audio_construction() {
+        let pcm = PcmAudio::new(48_000, 2, vec![1, 2, 3, 4]).expect("pcm");
+        assert_eq!(pcm.frame_count(), 2);
+        assert_eq!(pcm.duration_seconds(), 2.0 / 48_000.0);
+
+        let error = PcmAudio::new(0, 1, vec![1]).expect_err("invalid sample rate");
+        assert_eq!(
+            error.to_string(),
+            "Invalid input sample rate: must be greater than zero"
+        );
+
+        let error = PcmAudio::new(48_000, 0, vec![1]).expect_err("invalid channels");
+        assert_eq!(
+            error.to_string(),
+            "Invalid number of input channels: must be greater than zero"
+        );
+
+        let error = PcmAudio::new(48_000, 2, vec![1, 2, 3]).expect_err("unaligned samples");
+        assert_eq!(
+            error.to_string(),
+            "Interleaved PCM sample count must be divisible by the channel count"
+        );
+    }
+
+    #[test]
+    fn resolves_scale_specifications_and_rejects_invalid_values() {
+        assert_eq!(
+            ScaleSpec::SamplesPerPixel(64)
+                .resolve(48_000, 96_000)
+                .expect("samples per pixel"),
+            64
+        );
+        assert_eq!(
+            ScaleSpec::PixelsPerSecond(100)
+                .resolve(48_000, 96_000)
+                .expect("pixels per second"),
+            480
+        );
+        assert_eq!(
+            ScaleSpec::FitWidth {
+                width_pixels: 400,
+                time_range: Some((0.0, 4.0)),
+            }
+            .resolve(48_000, 0)
+            .expect("fit width"),
+            480
+        );
+
+        let error = ScaleSpec::PixelsPerSecond(0)
+            .resolve(48_000, 0)
+            .expect_err("invalid pixels per second");
+        assert_eq!(
+            error.to_string(),
+            "Invalid pixels per second: must be greater than zero"
+        );
+
+        let error = ScaleSpec::FitWidth {
+            width_pixels: 0,
+            time_range: None,
+        }
+        .resolve(48_000, 96_000)
+        .expect_err("invalid width");
+        assert_eq!(error.to_string(), "Invalid image width: minimum 1");
+
+        let error = ScaleSpec::FitWidth {
+            width_pixels: 400,
+            time_range: Some((5.0, 4.0)),
+        }
+        .resolve(48_000, 96_000)
+        .expect_err("invalid range");
+        assert_eq!(
+            error.to_string(),
+            "Invalid end time, must be greater than 5"
+        );
+
+        let error = ScaleSpec::FitWidth {
+            width_pixels: 100_000,
+            time_range: None,
+        }
+        .resolve(48_000, 96_000)
+        .expect_err("zoom too small");
+        assert_eq!(error.to_string(), "Invalid zoom: minimum 2");
+    }
+
+    #[test]
+    fn parses_raw_sample_formats_and_validates_raw_audio_config() {
+        assert_eq!(
+            RawSampleFormat::from_str("s16le").expect("raw sample format"),
+            RawSampleFormat::S16Le
+        );
+        assert_eq!(
+            RawSampleFormat::from_str("F64BE").expect("raw sample format"),
+            RawSampleFormat::F64Be
+        );
+        let error = RawSampleFormat::from_str("pcm").expect_err("unsupported format");
+        assert_eq!(error.to_string(), "Unsupported format: pcm");
+
+        let config = RawAudioConfig::new(44_100, 2, RawSampleFormat::S16Le).expect("config");
+        assert_eq!(config.sample_rate, 44_100);
+        assert_eq!(config.channels, 2);
+
+        let error =
+            RawAudioConfig::new(0, 1, RawSampleFormat::S16Le).expect_err("invalid sample rate");
+        assert_eq!(
+            error.to_string(),
+            "Invalid input sample rate: must be greater than zero"
+        );
+
+        let error =
+            RawAudioConfig::new(44_100, 0, RawSampleFormat::S16Le).expect_err("invalid channels");
+        assert_eq!(
+            error.to_string(),
+            "Invalid number of input channels: must be greater than zero"
+        );
+    }
+
+    #[test]
+    fn decodes_representative_raw_sample_formats() {
+        let cases = [
+            (RawSampleFormat::S8, vec![0x80], i16::MIN),
+            (RawSampleFormat::U8, vec![0xff], 32_512),
+            (RawSampleFormat::S16Le, vec![0x34, 0x12], 0x1234),
+            (RawSampleFormat::S16Be, vec![0x12, 0x34], 0x1234),
+            (RawSampleFormat::S24Le, vec![0x00, 0x00, 0x01], 256),
+            (RawSampleFormat::S24Be, vec![0x01, 0x00, 0x00], 256),
+            (RawSampleFormat::S32Le, vec![0x00, 0x00, 0x01, 0x00], 1),
+            (RawSampleFormat::S32Be, vec![0x00, 0x01, 0x00, 0x00], 1),
+            (
+                RawSampleFormat::F32Le,
+                1.0_f32.to_le_bytes().to_vec(),
+                i16::MAX,
+            ),
+            (
+                RawSampleFormat::F32Be,
+                1.0_f32.to_be_bytes().to_vec(),
+                i16::MAX,
+            ),
+            (
+                RawSampleFormat::F64Le,
+                1.0_f64.to_le_bytes().to_vec(),
+                i16::MAX,
+            ),
+            (
+                RawSampleFormat::F64Be,
+                1.0_f64.to_be_bytes().to_vec(),
+                i16::MAX,
+            ),
+        ];
+
+        for (format, bytes, expected) in cases {
+            assert_eq!(parse_raw_sample(&bytes, format), expected, "{format:?}");
+        }
+    }
+
+    #[test]
+    fn decodes_raw_audio_and_rejects_unaligned_buffers() {
+        let config = RawAudioConfig::new(16_000, 1, RawSampleFormat::S16Le).expect("config");
+        let pcm = parse_raw_audio(&[0x01, 0x00, 0xff, 0xff], &config).expect("parse raw");
+        assert_eq!(pcm.samples(), &[1, -1]);
+
+        let error = parse_raw_audio(&[0x01], &config).expect_err("unaligned bytes");
+        assert_eq!(
+            error.to_string(),
+            "Raw audio byte length is not aligned to the sample format"
+        );
+    }
+
+    #[test]
+    fn generates_waveforms_from_pcm_for_mixed_and_split_channels() {
+        let pcm = PcmAudio::new(48_000, 2, vec![100, 300, 200, 400, -100, -300, -200, -400])
+            .expect("pcm");
+
+        let mixed = generate_waveform_from_pcm(
+            &pcm,
+            &GenerateOptions {
+                scale: ScaleSpec::SamplesPerPixel(2),
+                split_channels: false,
+                amplitude_scale: None,
+            },
+        )
+        .expect("mixed waveform");
+        assert_eq!(mixed.channels(), 1);
+        assert_eq!(
+            mixed.point(0, 0).expect("first point"),
+            WaveformPoint { min: 200, max: 300 }
+        );
+        assert_eq!(
+            mixed.point(0, 1).expect("second point"),
+            WaveformPoint {
+                min: -300,
+                max: -200,
+            }
+        );
+
+        let split = generate_waveform_from_pcm(
+            &pcm,
+            &GenerateOptions {
+                scale: ScaleSpec::SamplesPerPixel(2),
+                split_channels: true,
+                amplitude_scale: Some(AmplitudeScale::Fixed(2.0)),
+            },
+        )
+        .expect("split waveform");
+        assert_eq!(split.channels(), 2);
+        assert_eq!(
+            split.point(0, 0).expect("left point"),
+            WaveformPoint { min: 200, max: 400 }
+        );
+        assert_eq!(
+            split.point(1, 1).expect("right point"),
+            WaveformPoint {
+                min: -800,
+                max: -600,
+            }
+        );
+    }
 }

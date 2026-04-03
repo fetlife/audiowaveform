@@ -598,7 +598,32 @@ const LABEL_FONT_ADVANCE: i32 = LABEL_FONT_WIDTH + LABEL_FONT_TRACKING;
 
 #[cfg(test)]
 mod tests {
-    use super::glyph_bitmap;
+    use super::{
+        LABEL_FONT_HEIGHT, RenderOptions, RenderStyle, glyph_bitmap, render_waveform,
+        round_up_to_nearest, seconds_to_string,
+    };
+    use crate::{AmplitudeScale, Waveform, WaveformColors, WaveformPoint};
+
+    fn sample_waveform() -> Waveform {
+        let mut waveform = Waveform::new(48_000, 64, 1).expect("waveform");
+        waveform
+            .push_frame(&[WaveformPoint {
+                min: -16_384,
+                max: 16_384,
+            }])
+            .expect("push point");
+        waveform
+    }
+
+    #[test]
+    fn formats_time_axis_labels() {
+        assert_eq!(seconds_to_string(5), "00:05");
+        assert_eq!(seconds_to_string(125), "02:05");
+        assert_eq!(seconds_to_string(3_665), "01:01:05");
+        assert_eq!(round_up_to_nearest(0.0, 5), 0);
+        assert_eq!(round_up_to_nearest(0.1, 5), 5);
+        assert_eq!(round_up_to_nearest(12.3, 10), 20);
+    }
 
     #[test]
     fn one_glyph_uses_a_thin_stem() {
@@ -606,5 +631,100 @@ mod tests {
             glyph_bitmap('1'),
             [0x08, 0x18, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x1C]
         );
+    }
+
+    #[test]
+    fn glyph_fallback_and_metrics_are_stable() {
+        assert_eq!(glyph_bitmap('?'), [0x00; LABEL_FONT_HEIGHT as usize]);
+    }
+
+    #[test]
+    fn validates_render_options_and_waveform_state() {
+        let waveform = sample_waveform();
+
+        let error = render_waveform(
+            &waveform,
+            &RenderOptions {
+                width: 0,
+                ..RenderOptions::default()
+            },
+        )
+        .expect_err("invalid width");
+        assert_eq!(error.to_string(), "Invalid image width: minimum 1");
+
+        let error = render_waveform(
+            &waveform,
+            &RenderOptions {
+                height: 0,
+                ..RenderOptions::default()
+            },
+        )
+        .expect_err("invalid height");
+        assert_eq!(error.to_string(), "Invalid image height: minimum 1");
+
+        let error = render_waveform(
+            &waveform,
+            &RenderOptions {
+                start_time: -0.1,
+                ..RenderOptions::default()
+            },
+        )
+        .expect_err("invalid start time");
+        assert_eq!(error.to_string(), "Invalid start time: minimum 0");
+
+        let error = render_waveform(
+            &Waveform::new(48_000, 64, 1).expect("empty waveform"),
+            &RenderOptions::default(),
+        )
+        .expect_err("empty waveform");
+        assert_eq!(error.to_string(), "Empty waveform buffer");
+    }
+
+    #[test]
+    fn validates_bar_rendering_and_amplitude_ranges() {
+        let waveform = sample_waveform();
+
+        let error = render_waveform(
+            &waveform,
+            &RenderOptions {
+                style: RenderStyle::Bars {
+                    width: 0,
+                    gap: 4,
+                    style: super::BarStyle::Square,
+                },
+                ..RenderOptions::default()
+            },
+        )
+        .expect_err("invalid bar width");
+        assert_eq!(error.to_string(), "Invalid bar width: minimum 1");
+
+        let error = render_waveform(
+            &waveform,
+            &RenderOptions {
+                amplitude_scale: AmplitudeScale::Fixed(-1.0),
+                ..RenderOptions::default()
+            },
+        )
+        .expect_err("negative amplitude scale");
+        assert_eq!(
+            error.to_string(),
+            "Invalid amplitude scale: must be a positive number"
+        );
+    }
+
+    #[test]
+    fn renders_an_image_with_expected_dimensions() {
+        let image = render_waveform(
+            &sample_waveform(),
+            &RenderOptions {
+                width: 32,
+                height: 20,
+                colors: WaveformColors::default(),
+                ..RenderOptions::default()
+            },
+        )
+        .expect("render image");
+
+        assert_eq!(image.dimensions(), (32, 20));
     }
 }

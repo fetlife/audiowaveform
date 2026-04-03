@@ -7,6 +7,32 @@ repository.workspace = true
 authors.workspace = true
 description = "Audio waveform generation, serialization, rendering, and transcoding library"
 
+[[example]]
+name = "generate_waveform"
+required-features = ["decode"]
+
+[[example]]
+name = "render_waveform"
+required-features = ["render"]
+
+[[example]]
+name = "generate_from_pcm"
+
+[[example]]
+name = "resample_waveform"
+
+[[test]]
+name = "generate"
+required-features = ["decode"]
+
+[[test]]
+name = "render"
+required-features = ["render"]
+
+[[test]]
+name = "wav"
+required-features = ["wav"]
+
 [features]
 default = ["decode", "render", "wav"]
 decode = ["dep:symphonia"]
@@ -24,4 +50,7 @@ symphonia = { workspace = true, optional = true }
 thiserror.workspace = true
 
 [dev-dependencies]
+assert_cmd.workspace = true
 image.workspace = true
+predicates.workspace = true
+tempfile.workspace = true
