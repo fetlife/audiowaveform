@@ -9,7 +9,7 @@ resolver = "2"
 version = "1.10.3"
 edition = "2024"
 license = "GPL-3.0-or-later"
-repository = "https://github.com/bbc/audiowaveform"
+repository = "https://github.com/fetlife/audiowaveform"
 authors = ["Andrii Dmytrenko", "BBC Research and Development"]
 
 [workspace.dependencies]
