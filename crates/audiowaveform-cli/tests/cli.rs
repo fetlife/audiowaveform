@@ -192,7 +192,7 @@ fn transcodes_audio_to_wav_output() {
 
     assert_eq!(
         std::fs::read(output.path()).expect("read wav"),
-        read_fixture("rust/test_file_mono_converted.wav")
+        read_fixture("test_file_mono_converted.wav")
     );
 }
 

@@ -42,7 +42,7 @@ cargo build --workspace
 Run the CLI:
 
 ```sh
-cargo run -p audiowaveform-cli -- -i test/data/test_file_stereo.wav -o output.dat
+cargo run -p audiowaveform-cli -- -i fixtures/test_file_stereo.wav -o output.dat
 ```
 
 Install the CLI locally:

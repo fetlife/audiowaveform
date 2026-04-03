@@ -50,6 +50,6 @@ fn transcodes_audio_to_expected_wav_fixture() {
 
     assert_bytes_eq(
         &std::fs::read(output.path()).expect("read wav"),
-        "rust/test_file_mono_converted.wav",
+        "test_file_mono_converted.wav",
     );
 }

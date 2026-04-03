@@ -57,18 +57,18 @@ fn generates_expected_waveform_bytes_from_supported_audio_inputs() {
         ),
         (
             "test_file_stereo.mp3",
-            "rust/test_file_stereo_8bit_64spp_mp3.dat",
-            "rust/test_file_stereo_8bit_64spp_mp3.json",
+            "test_file_stereo_8bit_64spp_mp3.dat",
+            "test_file_stereo_8bit_64spp_mp3.json",
         ),
         (
             "test_file_stereo.flac",
-            "rust/test_file_stereo_8bit_64spp_flac.dat",
-            "rust/test_file_stereo_8bit_64spp_flac.json",
+            "test_file_stereo_8bit_64spp_flac.dat",
+            "test_file_stereo_8bit_64spp_flac.json",
         ),
         (
             "test_file_stereo.oga",
-            "rust/test_file_stereo_8bit_64spp_oga.dat",
-            "rust/test_file_stereo_8bit_64spp_oga.json",
+            "test_file_stereo_8bit_64spp_oga.dat",
+            "test_file_stereo_8bit_64spp_oga.json",
         ),
     ];
 

@@ -7,7 +7,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = env::args().skip(1);
     let input = args
         .next()
-        .unwrap_or_else(|| "test/data/test_file_stereo.wav".to_string());
+        .unwrap_or_else(|| "fixtures/test_file_stereo.wav".to_string());
     let output = args.next().unwrap_or_else(|| "output.dat".to_string());
 
     let waveform = generate_waveform_from_path(&input, &GenerateOptions::default())?;

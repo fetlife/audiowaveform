@@ -42,8 +42,7 @@ cargo test -p audiowaveform --no-default-features --features wav
 
 ## Fixtures and Goldens
 
-- Shared fixtures live in `test/data`.
-- Rust-specific goldens live in `test/data/rust`.
+- Shared fixtures and goldens live in `fixtures/`.
 - If you intentionally change rendered output or decoder behavior, update the relevant golden files and explain why in the change.
 
 ## Releases
