@@ -1,8 +1,30 @@
-name: Rust
+name: CI
 
-on: [push]
+on:
+  push:
+  pull_request:
 
 jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Lint workspace
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
   library-matrix:
     runs-on: ubuntu-latest
     strategy:
@@ -26,10 +48,12 @@ jobs:
       - name: Run ${{ matrix.name }}
         run: ${{ matrix.command }}
 
-  cli:
+  workspace:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Test CLI
-        run: cargo test -p audiowaveform-cli
+      - name: Test workspace
+        run: cargo test --workspace
+      - name: Check examples
+        run: cargo check --workspace --examples

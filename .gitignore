@@ -1,4 +1,3 @@
-build
-googletest
-googletest-release-*
+build/
 target/
+audiowaveform-rs/

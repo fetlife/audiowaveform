@@ -1,4 +1,4 @@
-.TH audiowaveform 1 "23 January 2024"
+.TH audiowaveform 1 "03 April 2026"
 
 .SH NAME
 
@@ -11,9 +11,9 @@ audiowaveform \- generates and renders waveforms from audio files
 .SH DESCRIPTION
 
 .B audiowaveform
-generates waveform data from either MP3, WAV, FLAC, Ogg Vorbis, or Opus format
-audio files. Waveform data can be used to produce a visual rendering of the
-audio, similar in appearance to audio editing applications.
+generates waveform data from MP3, WAV, FLAC, Ogg Vorbis, and raw PCM audio
+sources. Waveform data can be used to produce a visual rendering of the audio,
+similar in appearance to audio editing applications.
 
 Waveform data files are saved in either binary format (.dat) or JSON (.json).
 Given an input waveform data file,
@@ -55,16 +55,13 @@ Disable status messages.
 
 .TP
 .B --input-filename\fR, \fB-i\fR <filename>
-Input filename, which should be a MP3, WAV, FLAC, Ogg Vorbis, or Opus audio file,
+Input filename, which should be a MP3, WAV, FLAC, Ogg Vorbis, raw audio file,
 or a binary or JSON format waveform data file. By default, \fBaudiowaveform\fR
 uses the file extension to decide how to read the input file (either .mp3, .wav,
-\&.flac, .ogg, .oga, .opus, .dat, or .json as appropriate), but this can be
+\&.flac, .ogg, .oga, .raw, .dat, or .json as appropriate), but this can be
 overridden by the \fB--input-format\fR option. If the \fB--input-filename\fR
 option is \fB-\fR or is omitted, \fBaudiowaveform\fR reads from standard input,
 and the \fB--input-format\fR option must be used to specify the data format.
-
-Note that Opus support requires libsndfile 1.0.29 or later, so may not be
-available on all systems.
 
 .TP
 .B --output-filename\fR, \fB-o\fR <filename>
@@ -79,17 +76,17 @@ by the \fB--output-format\fR option. If the \fB--output-filename\fR option is
 .TP
 .B --input-format\fR <format>
 Input data format, either \fBwav\fR, \fBmp3\fR, \fBflac\fR, \fBogg\fR,
-\fBopus\fR, \fBdat\fR, or \fBjson\fR. This option must be used when reading
+\fBraw\fR, \fBdat\fR, or \fBjson\fR. This option must be used when reading
 from standard input. It may also be used to set the input file format, instead
 of it being determined from the file extension from the \fB--input-filename\fR
 option.
 
 .TP
 .B --output-format\fR <format>
-Output data format, either \fBwav\fR, \fBdat\fR, \fBjson\fR, or \fBpng\fR. This
-option must be used when writing to standard output. It may also be used to set
-the output file format, instead of it being determined from the file extension
-from the \fB--output-filename\fR option.
+Output data format, either \fBwav\fR, \fBdat\fR, \fBjson\fR, \fBtxt\fR, or
+\fBpng\fR. This option must be used when writing to standard output. It may also
+be used to set the output file format, instead of it being determined from the
+file extension from the \fB--output-filename\fR option.
 
 .TP
 .B --zoom\fR, \fB-z\fR <zoom> (default: 256)

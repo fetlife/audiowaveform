@@ -1,53 +1,56 @@
 # Contributing
 
-Thank you for your interest in audiowaveform!
+Thanks for working on `audiowaveform`.
 
-We love hearing feedback from people who use our software, so if you are using this for something interesting, please let us know.
+The project is a Rust workspace centered on the `audiowaveform` library crate,
+with `audiowaveform-cli` as a thin adapter. Reusable logic belongs in the
+library. CLI-only argument parsing, user-facing logging, and exit handling
+belong in the binary crate.
 
-Contributions are welcomed and encouraged. If you're thinking of writing a new feature, please first discuss the change you wish to make, either by raising an issue, or contacting us directly, e.g., [by email](mailto:chris@chrisneedham.com).
+## Before You Start
 
-We may not always be able to respond immediately to feedback, so please bear with us and have patience.
+- Discuss substantial feature work before implementing it.
+- Work from an up-to-date branch.
+- Keep changes focused; avoid mixing refactors, behavior changes, and fixture updates unless they are directly related.
 
-## Making changes
+## Development Expectations
 
-* If we agree with your feature proposal, we'll work with you to develop and integrate the feature.
+- Follow the existing Rust style and module boundaries.
+- Keep the public API narrow and ergonomic.
+- Every public struct, enum, function, and public method must remain documented.
+- Update rustdoc examples and README examples when public behavior changes.
+- Add or update tests for behavior changes. Prefer unit tests for internal logic and integration tests for end-to-end workflows.
 
-* Please avoid making commits directly to your copy of the `master` branch. This branch is reserved for aggregating changes from other people, and for mainline development from the core contributors. If you commit to `master`, it's likely that your local fork will diverge from the [upstream repository](https://github.com/bbc/audiowaveform).
+## Local Checks
 
-* Before working on a change, please ensure your local fork is up to date with the code in the upstream repository, and create a [feature branch](https://www.atlassian.com/git/tutorials/comparing-workflows/feature-branch-workflow) for your changes.
+Run these before sending a change for review:
 
-* We may want to make minor changes to your pull request before merging, so please ensure that the **Allow edits from maintainers** option on your feature branch is enabled.
+```sh
+cargo fmt --all
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace
+```
 
-* Please don't change the [VERSION](https://github.com/bbc/audiowaveform/blob/master/VERSION) file, or update [CHANGELOG.md](https://github.com/bbc/audiowaveform/blob/master/CHANGELOG.md). We'll do that when [preparing a new release](#preparing-a-new-release).
+If you touch feature-gated code in the library, also run the feature matrix used in CI:
 
-* Please follow the existing coding conventions.
+```sh
+cargo test -p audiowaveform --no-default-features
+cargo test -p audiowaveform --no-default-features --features decode
+cargo test -p audiowaveform --no-default-features --features render
+cargo test -p audiowaveform --no-default-features --features wav
+```
 
-* Code or documentation contributions produced by generative AI tools are not allowed.
+## Fixtures and Goldens
 
-* For commit messages, please follow [these guidelines](https://chris.beams.io/posts/git-commit/), although we're not fussy about use of imperative mood vs past tense. In particular, please don't use [Conventional Commits](https://www.conventionalcommits.org/) style. We may choose to edit your commit messages for consistency when merging.
+- Shared fixtures live in `test/data`.
+- Rust-specific goldens live in `test/data/rust`.
+- If you intentionally change rendered output or decoder behavior, update the relevant golden files and explain why in the change.
 
-* Please add test cases for your feature, and ensure all tests are passing (`make test`).
+## Releases
 
-* When merging a feature branch, we may choose to squash your commits so that the feature is merged as a single logical change.
+Release preparation should be a dedicated change. For a release:
 
-### Preparing a new release
-
-* When it's time to publish a new release version, create a single commit on `master` with the following changes only:
-
-  * Increment the version number in [VERSION](https://github.com/bbc/audiowaveform/blob/master/VERSION).
-
-  * Describe the new features in this release in [CHANGELOG.md](https://github.com/bbc/audiowaveform/blob/master/CHANGELOG.md).
-
-  * Update the [debian changelog](https://github.com/bbc/audiowaveform/blob/master/debian/changelog).
-
-* Tag this commit using the form `X.Y.Z` and push the commit using `git push origin master --tags`.
-
-* In GitHub, [create a Release](https://github.com/bbc/audiowaveform/releases/new) from this tag, with the tag name as Release title, i.e., `X.Y.Z`.
-
-* Publish the source package to [Launchpad](https://launchpad.net/) using the [packaging script](https://github.com/bbc/audiowaveform/tree/master/ubuntu).
-
-* Update the [Homebrew formula](https://github.com/bbc/homebrew-audiowaveform).
-
-* Compile Windows binaries using [compile-static-audiowaveform](https://github.com/chrisn/compile-static-audiowaveform) and upload to the GitHub Release page.
-
-* Build [RPM and Debian packages](https://github.com/bbc/audiowaveform/tree/master/rpm) and upload to the GitHub Release page.
+- Update `[workspace.package].version` in `Cargo.toml`.
+- Update `CHANGELOG.md`.
+- Regenerate `Cargo.lock` if dependency resolution changes.
+- Tag the release as `X.Y.Z`.
