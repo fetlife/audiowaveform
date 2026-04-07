@@ -1,5 +1,9 @@
 # Audiowaveform Version History
 
+This repository is a Rust rewrite of the original BBC `audiowaveform`
+project. Historical entries below are inherited from that original project and
+are kept here as release history context.
+
 ## v1.10.3 (2025-08-20)
 
  * Fixed CMakeLists.txt to work with Boost 1.89.0 and later versions
