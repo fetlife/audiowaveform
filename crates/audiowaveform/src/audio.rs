@@ -7,19 +7,21 @@ use std::io::Seek;
 use std::path::Path;
 
 #[cfg(feature = "decode")]
-use symphonia::core::audio::{AudioBufferRef, SampleBuffer, Signal};
+use symphonia::core::audio::GenericAudioBufferRef;
 #[cfg(feature = "decode")]
-use symphonia::core::codecs::DecoderOptions;
+use symphonia::core::codecs::audio::AudioDecoderOptions;
 #[cfg(feature = "decode")]
 use symphonia::core::errors::Error as SymphoniaError;
 #[cfg(feature = "decode")]
 use symphonia::core::formats::FormatOptions;
 #[cfg(feature = "decode")]
+use symphonia::core::formats::TrackType;
+#[cfg(feature = "decode")]
 use symphonia::core::io::{MediaSource, MediaSourceStream};
 #[cfg(feature = "decode")]
 use symphonia::core::meta::MetadataOptions;
 #[cfg(feature = "decode")]
-use symphonia::core::probe::Hint;
+use symphonia::core::formats::probe::Hint;
 #[cfg(feature = "decode")]
 use symphonia::default::{get_codecs, get_probe};
 
@@ -553,31 +555,37 @@ pub(crate) fn decode_audio_reader<R: Read + Seek + Send + Sync + 'static>(
         Box::new(ReadSeekMediaSource::new(reader, byte_len)),
         Default::default(),
     );
-    let probed = get_probe().format(
+    let mut format = get_probe().probe(
         &hint,
         source,
-        &FormatOptions::default(),
-        &MetadataOptions::default(),
+        FormatOptions::default(),
+        MetadataOptions::default(),
     )?;
-    let mut format = probed.format;
-    let track = format.default_track().ok_or(Error::MissingMetadata {
+    let track = format.default_track(TrackType::Audio).ok_or(Error::MissingMetadata {
         name: "default track",
     })?;
-    let codec_params = &track.codec_params;
+    let codec_params = track
+        .codec_params
+        .as_ref()
+        .and_then(|params| params.audio())
+        .ok_or(Error::MissingMetadata {
+            name: "audio codec parameters",
+        })?;
     let sample_rate = codec_params.sample_rate.ok_or(Error::MissingMetadata {
         name: "sample_rate",
     })?;
     let channels = codec_params
         .channels
+        .as_ref()
         .ok_or(Error::MissingMetadata { name: "channels" })?
         .count() as u16;
-    let encoder_delay = codec_params.delay.unwrap_or(0) as usize;
-    let mut decoder = get_codecs().make(codec_params, &DecoderOptions::default())?;
+    let mut decoder = get_codecs().make_audio_decoder(codec_params, &AudioDecoderOptions::default())?;
 
     let mut samples = Vec::new();
     loop {
         let packet = match format.next_packet() {
-            Ok(packet) => packet,
+            Ok(Some(packet)) => packet,
+            Ok(None) => break,
             Err(SymphoniaError::IoError(error))
                 if error.kind() == std::io::ErrorKind::UnexpectedEof =>
             {
@@ -597,60 +605,13 @@ pub(crate) fn decode_audio_reader<R: Read + Seek + Send + Sync + 'static>(
             Err(error) => return Err(error.into()),
         };
 
-        match decoded {
-            AudioBufferRef::F32(buffer) => {
-                extend_interleaved_f32_samples(buffer.as_ref(), &mut samples);
-            }
-            AudioBufferRef::F64(buffer) => {
-                extend_interleaved_f64_samples(buffer.as_ref(), &mut samples);
-            }
-            _ => {
-                let spec = *decoded.spec();
-                let mut sample_buffer = SampleBuffer::<i16>::new(decoded.capacity() as u64, spec);
-                sample_buffer.copy_interleaved_ref(decoded);
-                samples.extend_from_slice(sample_buffer.samples());
-            }
-        }
-    }
-
-    if encoder_delay > 0 {
-        let samples_to_skip = encoder_delay.saturating_mul(usize::from(channels));
-        if samples_to_skip < samples.len() {
-            samples.drain(..samples_to_skip);
-        } else {
-            samples.clear();
-        }
+        let decoded: GenericAudioBufferRef<'_> = decoded;
+        let start = samples.len();
+        samples.resize(start + decoded.samples_interleaved(), 0);
+        decoded.copy_to_slice_interleaved(&mut samples[start..]);
     }
 
     PcmAudio::new(sample_rate, channels, samples)
-}
-
-#[cfg(feature = "decode")]
-fn extend_interleaved_f32_samples(
-    buffer: &symphonia::core::audio::AudioBuffer<f32>,
-    samples: &mut Vec<i16>,
-) {
-    let channels = buffer.spec().channels.count();
-    for frame in 0..buffer.frames() {
-        for channel in 0..channels {
-            let sample = buffer.chan(channel)[frame];
-            samples.push(clamp_float_to_i16(f64::from(sample) * f64::from(i16::MAX)));
-        }
-    }
-}
-
-#[cfg(feature = "decode")]
-fn extend_interleaved_f64_samples(
-    buffer: &symphonia::core::audio::AudioBuffer<f64>,
-    samples: &mut Vec<i16>,
-) {
-    let channels = buffer.spec().channels.count();
-    for frame in 0..buffer.frames() {
-        for channel in 0..channels {
-            let sample = buffer.chan(channel)[frame];
-            samples.push(clamp_float_to_i16(sample * f64::from(i16::MAX)));
-        }
-    }
 }
 
 #[cfg(test)]
