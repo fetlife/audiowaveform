@@ -17,11 +17,11 @@ use symphonia::core::formats::FormatOptions;
 #[cfg(feature = "decode")]
 use symphonia::core::formats::TrackType;
 #[cfg(feature = "decode")]
+use symphonia::core::formats::probe::Hint;
+#[cfg(feature = "decode")]
 use symphonia::core::io::{MediaSource, MediaSourceStream};
 #[cfg(feature = "decode")]
 use symphonia::core::meta::MetadataOptions;
-#[cfg(feature = "decode")]
-use symphonia::core::formats::probe::Hint;
 #[cfg(feature = "decode")]
 use symphonia::default::{get_codecs, get_probe};
 
@@ -561,9 +561,11 @@ pub(crate) fn decode_audio_reader<R: Read + Seek + Send + Sync + 'static>(
         FormatOptions::default(),
         MetadataOptions::default(),
     )?;
-    let track = format.default_track(TrackType::Audio).ok_or(Error::MissingMetadata {
-        name: "default track",
-    })?;
+    let track = format
+        .default_track(TrackType::Audio)
+        .ok_or(Error::MissingMetadata {
+            name: "default track",
+        })?;
     let codec_params = track
         .codec_params
         .as_ref()
@@ -579,7 +581,8 @@ pub(crate) fn decode_audio_reader<R: Read + Seek + Send + Sync + 'static>(
         .as_ref()
         .ok_or(Error::MissingMetadata { name: "channels" })?
         .count() as u16;
-    let mut decoder = get_codecs().make_audio_decoder(codec_params, &AudioDecoderOptions::default())?;
+    let mut decoder =
+        get_codecs().make_audio_decoder(codec_params, &AudioDecoderOptions::default())?;
 
     let mut samples = Vec::new();
     loop {
