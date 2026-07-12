@@ -469,7 +469,11 @@ impl Waveform {
         Self::validate_metadata(json.sample_rate, json.samples_per_pixel, channels)?;
         Self::validate_storage_bits(json.bits)?;
 
-        let expected = json.length * usize::from(channels) * 2;
+        let expected = json
+            .length
+            .checked_mul(usize::from(channels))
+            .and_then(|value| value.checked_mul(2))
+            .ok_or_else(|| Error::invalid_data("Waveform length is too large"))?;
         if json.data.len() != expected {
             return Err(Error::invalid_data(format!(
                 "Length mismatch: expected {expected} values, found {}",

@@ -157,6 +157,14 @@ fn rejects_invalid_json_waveform_payloads() {
     )
     .expect_err("json range mismatch");
     assert_eq!(error.to_string(), "Data value out of range: 999");
+
+    let overflowing_length = format!(
+        r#"{{"version":2,"channels":1,"sample_rate":44100,"samples_per_pixel":256,"bits":8,"length":{},"data":[]}}"#,
+        usize::MAX
+    );
+    let error = Waveform::load_from_reader(overflowing_length.as_bytes(), WaveformFormat::Json)
+        .expect_err("overflowing json length");
+    assert_eq!(error.to_string(), "Waveform length is too large");
 }
 
 #[test]
