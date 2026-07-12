@@ -1,3 +1,4 @@
 build/
 target/
 audiowaveform-rs/
+.cargo-home/
