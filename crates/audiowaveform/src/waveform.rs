@@ -430,7 +430,13 @@ impl Waveform {
         let samples_per_pixel = reader.read_u32::<LittleEndian>()?;
         let length = reader.read_u32::<LittleEndian>()? as usize;
         let channels = if version == 2 {
-            reader.read_u32::<LittleEndian>()? as u16
+            let channels = reader.read_i32::<LittleEndian>()?;
+            u16::try_from(channels).map_err(|_| {
+                Error::invalid_argument(
+                    "channels",
+                    format!("Invalid channels: must be between 1 and {MAX_CHANNELS}"),
+                )
+            })?
         } else {
             1
         };
