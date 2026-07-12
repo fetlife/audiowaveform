@@ -318,23 +318,29 @@ fn get_bar_height(waveform: &Waveform, channel: u16, start: usize, width: usize)
 
 fn draw_time_axis_labels(image: &mut RgbaImage, waveform: &Waveform, options: &RenderOptions) {
     let marker_height = 10_i32;
-    let interval_secs = axis_label_scale(waveform, options);
-    let first_secs = round_up_to_nearest(options.start_time, interval_secs);
+    let Some(interval_secs) = axis_label_scale(waveform) else {
+        return;
+    };
+    let Some(first_secs) = round_up_to_nearest(options.start_time, interval_secs) else {
+        return;
+    };
     let axis_label_offset_secs = first_secs as f64 - options.start_time;
     let axis_label_offset_pixels = ((axis_label_offset_secs * waveform.sample_rate() as f64)
-        as usize
-        / waveform.samples_per_pixel() as usize) as i32;
+        / waveform.samples_per_pixel() as f64) as i64;
     let border = rgba(options.colors.border);
     let text = rgba(options.colors.axis_label);
     let mut secs = first_secs;
 
     loop {
-        let x = axis_label_offset_pixels
-            + (((secs - first_secs) as i64 * waveform.sample_rate() as i64)
-                / waveform.samples_per_pixel() as i64) as i32;
-        if x >= image.width() as i32 {
+        let x = i128::from(axis_label_offset_pixels)
+            + (i128::from(secs - first_secs) * i128::from(waveform.sample_rate())
+                / i128::from(waveform.samples_per_pixel()));
+        if x >= i128::from(image.width()) {
             break;
         }
+        let Ok(x) = i32::try_from(x) else {
+            break;
+        };
         draw_vertical_line(image, x, 0, marker_height, border);
         draw_vertical_line(
             image,
@@ -351,26 +357,28 @@ fn draw_time_axis_labels(image: &mut RgbaImage, waveform: &Waveform, options: &R
         if label_x >= 0 {
             draw_text(image, label_x, label_y, &label, text);
         }
-        secs += interval_secs;
+        let Some(next_secs) = secs.checked_add(interval_secs) else {
+            break;
+        };
+        secs = next_secs;
     }
 }
 
-fn axis_label_scale(waveform: &Waveform, options: &RenderOptions) -> i32 {
-    let steps = [1_i32, 2, 5, 10, 20, 30];
-    let mut base = 1_i32;
+fn axis_label_scale(waveform: &Waveform) -> Option<i64> {
+    let steps = [1_i64, 2, 5, 10, 20, 30];
+    let mut base = 1_i64;
     let mut index = 0_usize;
     loop {
-        let secs = base * steps[index];
-        let pixels = seconds_to_pixels(waveform, secs as f64) as i32;
+        let secs = base.checked_mul(steps[index])?;
+        let pixels = seconds_to_pixels(waveform, secs as f64);
         if pixels < 60 {
             index += 1;
             if index == steps.len() {
-                base *= 60;
+                base = base.checked_mul(60)?;
                 index = 0;
             }
         } else {
-            let _ = options;
-            return secs;
+            return Some(secs);
         }
     }
 }
@@ -560,7 +568,7 @@ fn text_width(text: &str) -> i32 {
     }
 }
 
-fn seconds_to_string(seconds: i32) -> String {
+fn seconds_to_string(seconds: i64) -> String {
     let hours = seconds / 3600;
     let minutes = (seconds % 3600) / 60;
     let seconds = seconds % 60;
@@ -571,12 +579,15 @@ fn seconds_to_string(seconds: i32) -> String {
     }
 }
 
-fn round_up_to_nearest(value: f64, multiple: i32) -> i32 {
-    if multiple == 0 {
-        return 0;
+fn round_up_to_nearest(value: f64, multiple: i64) -> Option<i64> {
+    if multiple <= 0 || !value.is_finite() || value < 0.0 || value > i64::MAX as f64 {
+        return None;
     }
-    let rounded_up = value.ceil() as i32;
-    ((rounded_up + multiple - 1) / multiple) * multiple
+    let rounded_up = value.ceil() as i64;
+    rounded_up
+        .checked_add(multiple - 1)?
+        .checked_div(multiple)?
+        .checked_mul(multiple)
 }
 
 fn seconds_to_pixels(waveform: &Waveform, seconds: f64) -> usize {
@@ -626,9 +637,9 @@ mod tests {
         assert_eq!(seconds_to_string(5), "00:05");
         assert_eq!(seconds_to_string(125), "02:05");
         assert_eq!(seconds_to_string(3_665), "01:01:05");
-        assert_eq!(round_up_to_nearest(0.0, 5), 0);
-        assert_eq!(round_up_to_nearest(0.1, 5), 5);
-        assert_eq!(round_up_to_nearest(12.3, 10), 20);
+        assert_eq!(round_up_to_nearest(0.0, 5), Some(0));
+        assert_eq!(round_up_to_nearest(0.1, 5), Some(5));
+        assert_eq!(round_up_to_nearest(12.3, 10), Some(20));
     }
 
     #[test]
@@ -761,6 +772,26 @@ mod tests {
                 width: 32,
                 height: 20,
                 colors: WaveformColors::default(),
+                ..RenderOptions::default()
+            },
+        )
+        .expect("render image");
+
+        assert_eq!(image.dimensions(), (32, 20));
+    }
+
+    #[test]
+    fn renders_without_axis_labels_when_no_interval_fits() {
+        let mut waveform = Waveform::new(1, u32::MAX, 1).expect("waveform");
+        waveform
+            .push_frame(&[WaveformPoint { min: -1, max: 1 }])
+            .expect("push point");
+
+        let image = render_waveform(
+            &waveform,
+            &RenderOptions {
+                width: 32,
+                height: 20,
                 ..RenderOptions::default()
             },
         )
