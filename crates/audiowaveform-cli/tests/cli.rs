@@ -97,6 +97,28 @@ fn rejects_non_finite_numeric_values() {
 }
 
 #[test]
+fn rejects_raw_channel_counts_that_do_not_fit_the_library_type() {
+    Command::cargo_bin("audiowaveform")
+        .expect("binary")
+        .args([
+            "-q",
+            "--input-format",
+            "raw",
+            "--output-format",
+            "wav",
+            "--raw-samplerate",
+            "48000",
+            "--raw-channels",
+            "65537",
+            "--raw-format",
+            "s16le",
+        ])
+        .assert()
+        .failure()
+        .stderr("Invalid number of input channels: maximum 65535\n");
+}
+
+#[test]
 fn generates_dat_output_to_file_and_stdout() {
     let output = named_temp_file(".dat");
     Command::cargo_bin("audiowaveform")

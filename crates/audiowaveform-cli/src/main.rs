@@ -666,8 +666,10 @@ fn resolve_raw_audio_config(cli: &Cli) -> Result<RawAudioConfig, String> {
     if channels <= 0 {
         return Err("Invalid number of input channels: must be greater than zero".to_string());
     }
+    let channels = u16::try_from(channels)
+        .map_err(|_| "Invalid number of input channels: maximum 65535".to_string())?;
 
-    RawAudioConfig::new(sample_rate as u32, channels as u16, sample_format).map_err(stringify_error)
+    RawAudioConfig::new(sample_rate as u32, channels, sample_format).map_err(stringify_error)
 }
 
 fn generate_waveform_from_input(
