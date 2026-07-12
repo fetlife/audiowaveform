@@ -92,6 +92,12 @@ pub fn render_waveform(waveform: &Waveform, options: &RenderOptions) -> Result<R
     if waveform.is_empty() {
         return Err(Error::invalid_argument("waveform", "Empty waveform buffer"));
     }
+    if options.colors.waveform.is_empty() {
+        return Err(Error::invalid_argument(
+            "waveform colors",
+            "At least one waveform color is required",
+        ));
+    }
 
     let mut image = RgbaImage::from_pixel(
         options.width,
@@ -688,6 +694,18 @@ mod tests {
         )
         .expect_err("empty waveform");
         assert_eq!(error.to_string(), "Empty waveform buffer");
+
+        let mut colors = WaveformColors::default();
+        colors.waveform.clear();
+        let error = render_waveform(
+            &waveform,
+            &RenderOptions {
+                colors,
+                ..RenderOptions::default()
+            },
+        )
+        .expect_err("empty waveform color palette");
+        assert_eq!(error.to_string(), "At least one waveform color is required");
     }
 
     #[test]
