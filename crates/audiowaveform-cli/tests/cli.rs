@@ -1,6 +1,7 @@
 mod support;
 
 use assert_cmd::Command;
+use audiowaveform::Waveform;
 use predicates::prelude::*;
 
 use self::support::{
@@ -131,6 +132,40 @@ fn generates_json_and_text_outputs_to_stdout() {
         .success()
         .stdout(read_fixture("test_file_stereo_8bit_64spp_wav.txt"))
         .stderr("Done\n");
+}
+
+#[test]
+fn applies_fixed_amplitude_scaling_to_waveform_data_output() {
+    let unscaled_output = named_temp_file(".json");
+    let scaled_output = named_temp_file(".json");
+
+    for (output, amplitude_scale) in [(&unscaled_output, "1.0"), (&scaled_output, "2.0")] {
+        Command::cargo_bin("audiowaveform")
+            .expect("binary")
+            .args([
+                "-q",
+                "-i",
+                fixture_path("test_file_stereo.wav").to_str().expect("utf8"),
+                "-o",
+                output.path().to_str().expect("utf8"),
+                "-z",
+                "64",
+                "--amplitude-scale",
+                amplitude_scale,
+            ])
+            .assert()
+            .success();
+    }
+
+    let unscaled = Waveform::load_from_path(unscaled_output.path(), None).expect("unscaled");
+    let scaled = Waveform::load_from_path(scaled_output.path(), None).expect("scaled");
+    let expected = unscaled
+        .interleaved_samples()
+        .iter()
+        .map(|value| (i32::from(*value) * 2).clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16)
+        .collect::<Vec<_>>();
+
+    assert_eq!(scaled.interleaved_samples(), expected);
 }
 
 #[test]

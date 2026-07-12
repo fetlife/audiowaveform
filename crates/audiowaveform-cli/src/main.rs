@@ -424,7 +424,7 @@ fn run(cli: Cli) -> Result<(), String> {
                 split_channels: cli.split_channels,
                 amplitude_scale: match amplitude {
                     ParsedAmplitudeScale::Auto => Some(AmplitudeScale::Auto),
-                    ParsedAmplitudeScale::Fixed(_) => None,
+                    ParsedAmplitudeScale::Fixed(value) => Some(AmplitudeScale::Fixed(value)),
                 },
             },
         )?;
