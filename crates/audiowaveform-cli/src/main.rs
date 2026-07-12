@@ -556,7 +556,7 @@ fn parse_amplitude_scale(value: &str) -> Result<ParsedAmplitudeScale, String> {
     let parsed = value
         .parse::<f64>()
         .map_err(|_| "Error: Invalid amplitude scale: must be a number".to_string())?;
-    if parsed < 0.0 {
+    if !parsed.is_finite() || parsed < 0.0 {
         Err("Error: Invalid amplitude scale: must be a positive number".to_string())
     } else {
         Ok(ParsedAmplitudeScale::Fixed(parsed))

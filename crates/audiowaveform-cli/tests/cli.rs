@@ -57,6 +57,46 @@ fn rejects_invalid_enum_values_via_clap() {
 }
 
 #[test]
+fn rejects_non_finite_numeric_values() {
+    let input = fixture_path("test_file_stereo_8bit_64spp_wav.dat");
+    let input = input.to_str().expect("utf8");
+
+    Command::cargo_bin("audiowaveform")
+        .expect("binary")
+        .args([
+            "-q",
+            "-i",
+            input,
+            "--output-format",
+            "png",
+            "-z",
+            "64",
+            "--start",
+            "inf",
+        ])
+        .assert()
+        .failure()
+        .stderr("Invalid start time: minimum 0\n");
+
+    Command::cargo_bin("audiowaveform")
+        .expect("binary")
+        .args([
+            "-q",
+            "-i",
+            input,
+            "--output-format",
+            "png",
+            "-z",
+            "64",
+            "--amplitude-scale",
+            "NaN",
+        ])
+        .assert()
+        .failure()
+        .stderr("Error: Invalid amplitude scale: must be a positive number\n");
+}
+
+#[test]
 fn generates_dat_output_to_file_and_stdout() {
     let output = named_temp_file(".dat");
     Command::cargo_bin("audiowaveform")

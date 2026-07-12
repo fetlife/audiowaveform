@@ -277,7 +277,7 @@ impl Waveform {
     pub fn scale_amplitude(&self, scale: AmplitudeScale) -> Result<Self, Error> {
         let multiplier = match scale {
             AmplitudeScale::Fixed(multiplier) => {
-                if multiplier < 0.0 {
+                if !multiplier.is_finite() || multiplier < 0.0 {
                     return Err(Error::invalid_argument(
                         "amplitude scale",
                         "Invalid amplitude scale: must be a positive number",
@@ -685,6 +685,16 @@ mod tests {
             error.to_string(),
             "Invalid amplitude scale: must be a positive number"
         );
+
+        for value in [f64::NAN, f64::INFINITY] {
+            let error = waveform
+                .scale_amplitude(AmplitudeScale::Fixed(value))
+                .expect_err("non-finite amplitude scale");
+            assert_eq!(
+                error.to_string(),
+                "Invalid amplitude scale: must be a positive number"
+            );
+        }
     }
 
     #[test]

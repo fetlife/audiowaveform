@@ -83,7 +83,7 @@ pub fn render_waveform(waveform: &Waveform, options: &RenderOptions) -> Result<R
             "Invalid image height: minimum 1",
         ));
     }
-    if options.start_time < 0.0 {
+    if !options.start_time.is_finite() || options.start_time < 0.0 {
         return Err(Error::invalid_argument(
             "start time",
             "Invalid start time: minimum 0",
@@ -377,7 +377,7 @@ fn resolve_amplitude_scale(
 ) -> Result<f64, Error> {
     match scale {
         AmplitudeScale::Fixed(value) => {
-            if value < 0.0 {
+            if !value.is_finite() || value < 0.0 {
                 Err(Error::invalid_argument(
                     "amplitude scale",
                     "Invalid amplitude scale: must be a positive number",
@@ -673,6 +673,16 @@ mod tests {
         assert_eq!(error.to_string(), "Invalid start time: minimum 0");
 
         let error = render_waveform(
+            &waveform,
+            &RenderOptions {
+                start_time: f64::INFINITY,
+                ..RenderOptions::default()
+            },
+        )
+        .expect_err("non-finite start time");
+        assert_eq!(error.to_string(), "Invalid start time: minimum 0");
+
+        let error = render_waveform(
             &Waveform::new(48_000, 64, 1).expect("empty waveform"),
             &RenderOptions::default(),
         )
@@ -706,6 +716,19 @@ mod tests {
             },
         )
         .expect_err("negative amplitude scale");
+        assert_eq!(
+            error.to_string(),
+            "Invalid amplitude scale: must be a positive number"
+        );
+
+        let error = render_waveform(
+            &waveform,
+            &RenderOptions {
+                amplitude_scale: AmplitudeScale::Fixed(f64::NAN),
+                ..RenderOptions::default()
+            },
+        )
+        .expect_err("non-finite amplitude scale");
         assert_eq!(
             error.to_string(),
             "Invalid amplitude scale: must be a positive number"
