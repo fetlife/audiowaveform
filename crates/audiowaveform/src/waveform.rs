@@ -277,7 +277,7 @@ impl Waveform {
     pub fn scale_amplitude(&self, scale: AmplitudeScale) -> Result<Self, Error> {
         let multiplier = match scale {
             AmplitudeScale::Fixed(multiplier) => {
-                if multiplier < 0.0 {
+                if !multiplier.is_finite() || multiplier < 0.0 {
                     return Err(Error::invalid_argument(
                         "amplitude scale",
                         "Invalid amplitude scale: must be a positive number",
@@ -430,7 +430,13 @@ impl Waveform {
         let samples_per_pixel = reader.read_u32::<LittleEndian>()?;
         let length = reader.read_u32::<LittleEndian>()? as usize;
         let channels = if version == 2 {
-            reader.read_u32::<LittleEndian>()? as u16
+            let channels = reader.read_i32::<LittleEndian>()?;
+            u16::try_from(channels).map_err(|_| {
+                Error::invalid_argument(
+                    "channels",
+                    format!("Invalid channels: must be between 1 and {MAX_CHANNELS}"),
+                )
+            })?
         } else {
             1
         };
@@ -469,7 +475,11 @@ impl Waveform {
         Self::validate_metadata(json.sample_rate, json.samples_per_pixel, channels)?;
         Self::validate_storage_bits(json.bits)?;
 
-        let expected = json.length * usize::from(channels) * 2;
+        let expected = json
+            .length
+            .checked_mul(usize::from(channels))
+            .and_then(|value| value.checked_mul(2))
+            .ok_or_else(|| Error::invalid_data("Waveform length is too large"))?;
         if json.data.len() != expected {
             return Err(Error::invalid_data(format!(
                 "Length mismatch: expected {expected} values, found {}",
@@ -681,6 +691,16 @@ mod tests {
             error.to_string(),
             "Invalid amplitude scale: must be a positive number"
         );
+
+        for value in [f64::NAN, f64::INFINITY] {
+            let error = waveform
+                .scale_amplitude(AmplitudeScale::Fixed(value))
+                .expect_err("non-finite amplitude scale");
+            assert_eq!(
+                error.to_string(),
+                "Invalid amplitude scale: must be a positive number"
+            );
+        }
     }
 
     #[test]

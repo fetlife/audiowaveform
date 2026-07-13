@@ -168,7 +168,13 @@ impl ScaleSpec {
                     ));
                 }
                 let frames = if let Some((start, end)) = time_range {
-                    if end < start {
+                    if !start.is_finite() || start < 0.0 {
+                        return Err(Error::invalid_argument(
+                            "start time",
+                            "Invalid start time: minimum 0",
+                        ));
+                    }
+                    if !end.is_finite() || end < start {
                         return Err(Error::invalid_argument(
                             "end time",
                             format!("Invalid end time, must be greater than {start}"),
@@ -737,6 +743,25 @@ mod tests {
         assert_eq!(
             error.to_string(),
             "Invalid end time, must be greater than 5"
+        );
+
+        let error = ScaleSpec::FitWidth {
+            width_pixels: 400,
+            time_range: Some((f64::INFINITY, 10.0)),
+        }
+        .resolve(48_000, 96_000)
+        .expect_err("non-finite start time");
+        assert_eq!(error.to_string(), "Invalid start time: minimum 0");
+
+        let error = ScaleSpec::FitWidth {
+            width_pixels: 400,
+            time_range: Some((0.0, f64::INFINITY)),
+        }
+        .resolve(48_000, 96_000)
+        .expect_err("non-finite end time");
+        assert_eq!(
+            error.to_string(),
+            "Invalid end time, must be greater than 0"
         );
 
         let error = ScaleSpec::FitWidth {

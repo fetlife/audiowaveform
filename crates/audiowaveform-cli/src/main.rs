@@ -424,7 +424,7 @@ fn run(cli: Cli) -> Result<(), String> {
                 split_channels: cli.split_channels,
                 amplitude_scale: match amplitude {
                     ParsedAmplitudeScale::Auto => Some(AmplitudeScale::Auto),
-                    ParsedAmplitudeScale::Fixed(_) => None,
+                    ParsedAmplitudeScale::Fixed(value) => Some(AmplitudeScale::Fixed(value)),
                 },
             },
         )?;
@@ -556,7 +556,7 @@ fn parse_amplitude_scale(value: &str) -> Result<ParsedAmplitudeScale, String> {
     let parsed = value
         .parse::<f64>()
         .map_err(|_| "Error: Invalid amplitude scale: must be a number".to_string())?;
-    if parsed < 0.0 {
+    if !parsed.is_finite() || parsed < 0.0 {
         Err("Error: Invalid amplitude scale: must be a positive number".to_string())
     } else {
         Ok(ParsedAmplitudeScale::Fixed(parsed))
@@ -666,8 +666,10 @@ fn resolve_raw_audio_config(cli: &Cli) -> Result<RawAudioConfig, String> {
     if channels <= 0 {
         return Err("Invalid number of input channels: must be greater than zero".to_string());
     }
+    let channels = u16::try_from(channels)
+        .map_err(|_| "Invalid number of input channels: maximum 65535".to_string())?;
 
-    RawAudioConfig::new(sample_rate as u32, channels as u16, sample_format).map_err(stringify_error)
+    RawAudioConfig::new(sample_rate as u32, channels, sample_format).map_err(stringify_error)
 }
 
 fn generate_waveform_from_input(

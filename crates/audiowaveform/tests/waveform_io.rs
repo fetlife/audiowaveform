@@ -1,6 +1,7 @@
 mod support;
 
 use audiowaveform::{Waveform, WaveformFormat};
+use byteorder::{LittleEndian, WriteBytesExt};
 
 use self::support::{assert_bytes_eq, fixture_path, load_waveform, named_temp_file};
 
@@ -138,6 +139,25 @@ fn rejects_invalid_waveform_fixtures() {
 }
 
 #[test]
+fn rejects_dat_channel_counts_that_do_not_fit_the_internal_type() {
+    let mut dat = Vec::new();
+    dat.write_i32::<LittleEndian>(2).expect("version");
+    dat.write_u32::<LittleEndian>(0).expect("flags");
+    dat.write_u32::<LittleEndian>(44_100).expect("sample rate");
+    dat.write_u32::<LittleEndian>(256)
+        .expect("samples per pixel");
+    dat.write_u32::<LittleEndian>(0).expect("length");
+    dat.write_i32::<LittleEndian>(65_537).expect("channels");
+
+    let error = Waveform::load_from_reader(dat.as_slice(), WaveformFormat::Dat)
+        .expect_err("out-of-range channel count");
+    assert_eq!(
+        error.to_string(),
+        "Invalid channels: must be between 1 and 24"
+    );
+}
+
+#[test]
 fn rejects_invalid_json_waveform_payloads() {
     let error = Waveform::load_from_reader(
         br#"{"version":2,"channels":1,"sample_rate":44100,"samples_per_pixel":256,"bits":8,"length":2,"data":[1,2,3]}"#
@@ -157,6 +177,14 @@ fn rejects_invalid_json_waveform_payloads() {
     )
     .expect_err("json range mismatch");
     assert_eq!(error.to_string(), "Data value out of range: 999");
+
+    let overflowing_length = format!(
+        r#"{{"version":2,"channels":1,"sample_rate":44100,"samples_per_pixel":256,"bits":8,"length":{},"data":[]}}"#,
+        usize::MAX
+    );
+    let error = Waveform::load_from_reader(overflowing_length.as_bytes(), WaveformFormat::Json)
+        .expect_err("overflowing json length");
+    assert_eq!(error.to_string(), "Waveform length is too large");
 }
 
 #[test]
