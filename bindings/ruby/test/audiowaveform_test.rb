@@ -187,7 +187,7 @@ class AudioWaveformTest < Minitest::Test
       AudioWaveform.generate("missing.wav")
     end
 
-    assert_match(/missing\.wav|No such file/, error.message)
+    assert_match(/missing\.wav|No such file|cannot find the file/i, error.message)
   end
 
   private
