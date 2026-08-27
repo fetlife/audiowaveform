@@ -60,8 +60,10 @@ jobs:
         run: bundle exec rake build
       - name: Install and exercise source gem
         run: |
-          gem install --local --no-document bindings/ruby/pkg/*.gem
-          ruby -raudiowaveform -e 'waveform = AudioWaveform.generate(ARGV.fetch(0)); abort "empty waveform" if waveform.empty?' fixtures/test_file_mono.wav
+          install_dir="$(mktemp -d)"
+          bundle exec gem install --local --ignore-dependencies --no-document --install-dir "$install_dir" bindings/ruby/pkg/*.gem
+          bundle_gem_home="$(dirname "$(dirname "$(bundle show rb_sys)")")"
+          GEM_HOME="$install_dir" GEM_PATH="$install_dir:$bundle_gem_home" ruby -raudiowaveform -e 'waveform = AudioWaveform.generate(ARGV.fetch(0)); abort "empty waveform" if waveform.empty?' fixtures/test_file_mono.wav
       - uses: actions/upload-artifact@v4
         with:
           name: audiowaveform-source-gem
