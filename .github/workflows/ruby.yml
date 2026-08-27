@@ -1,0 +1,68 @@
+name: Ruby
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Ruby ${{ matrix.ruby }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ["3.2", "3.3", "3.4", "4.0"]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: Build extension and run tests
+        run: bundle exec rake
+
+  platform:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - name: Build extension and run tests
+        run: bundle exec rake
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - name: Build source gem
+        run: bundle exec rake build
+      - name: Install and exercise source gem
+        run: |
+          gem install --local --no-document bindings/ruby/pkg/*.gem
+          ruby -raudiowaveform -e 'waveform = AudioWaveform.generate(ARGV.fetch(0)); abort "empty waveform" if waveform.empty?' fixtures/test_file_mono.wav
+      - uses: actions/upload-artifact@v4
+        with:
+          name: audiowaveform-source-gem
+          path: bindings/ruby/pkg/*.gem
+          if-no-files-found: error
