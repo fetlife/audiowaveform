@@ -1,0 +1,8 @@
+# This workspace is separate from the main Rust workspace so Rust-only builds
+# do not require Ruby or its development headers.
+[workspace]
+members = ["ext/audiowaveform"]
+resolver = "2"
+
+[profile.release]
+debug = true
