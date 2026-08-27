@@ -3,6 +3,7 @@ members = [
     "crates/audiowaveform",
     "crates/audiowaveform-cli",
 ]
+exclude = ["bindings/ruby"]
 resolver = "2"
 
 [workspace.package]

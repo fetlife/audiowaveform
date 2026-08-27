@@ -14,10 +14,13 @@ It is a Rust rewrite of the original BBC `audiowaveform` project:
 The original project was created by Chris Needham and contributors at BBC
 Research & Development.
 
-The repository contains a Rust-only workspace:
+The repository's main workspace remains Rust-only:
 
 - `crates/audiowaveform`: reusable library crate
 - `crates/audiowaveform-cli`: thin `audiowaveform` command-line wrapper
+
+Ruby applications can use the native extension in `bindings/ruby` to generate
+waveforms in process through the same library crate.
 
 ![Example Waveform](doc/example.png "Example Waveform")
 
@@ -99,6 +102,25 @@ fn main() -> Result<(), audiowaveform::Error> {
 ```
 
 Additional examples live in `crates/audiowaveform/examples`.
+
+## Ruby Usage
+
+Install the `audiowaveform` gem from FetLife's repository and generate waveform
+data without invoking the command-line program:
+
+```ruby
+gem "audiowaveform", github: "fetlife/audiowaveform"
+```
+
+```ruby
+require "audiowaveform"
+
+waveform = AudioWaveform.generate("input.mp3", samples_per_pixel: 256)
+waveform.save("output.dat", bits: 8)
+```
+
+See [`bindings/ruby/README.md`](bindings/ruby/README.md) for the full Ruby API
+and development instructions.
 
 ## CLI Usage
 

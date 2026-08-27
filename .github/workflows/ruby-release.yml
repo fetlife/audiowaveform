@@ -1,0 +1,41 @@
+name: Ruby Source Gem Release
+
+on:
+  push:
+    tags:
+      - "ruby-v*"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  test:
+    uses: ./.github/workflows/ruby.yml
+
+  source-gem:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+      - name: Verify release tag
+        if: github.ref_type == 'tag'
+        run: test "$GITHUB_REF_NAME" = "ruby-v$(ruby -Ibindings/ruby/lib -raudiowaveform/version -e 'print AudioWaveform::VERSION')"
+      - uses: actions/download-artifact@v4
+        with:
+          name: audiowaveform-source-gem
+          path: bindings/ruby/pkg
+      - name: Attach gem to GitHub release
+        if: github.ref_type == 'tag'
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" bindings/ruby/pkg/*.gem --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" bindings/ruby/pkg/*.gem --generate-notes --title "$GITHUB_REF_NAME"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}

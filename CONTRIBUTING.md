@@ -40,6 +40,14 @@ cargo test -p audiowaveform --no-default-features --features render
 cargo test -p audiowaveform --no-default-features --features wav
 ```
 
+When changing the Ruby binding, also run:
+
+```sh
+bundle install
+bundle exec rake
+bundle exec rake build
+```
+
 ## Fixtures and Goldens
 
 - Shared fixtures and goldens live in `fixtures/`.

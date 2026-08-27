@@ -1,0 +1,20 @@
+[package]
+name = "audiowaveform-ruby"
+version = "0.1.0"
+edition = "2024"
+authors = ["Andrii Dmytrenko", "BBC Research and Development"]
+license = "GPL-3.0-or-later"
+repository = "https://github.com/fetlife/audiowaveform"
+publish = false
+
+[lib]
+name = "audiowaveform_ruby"
+crate-type = ["cdylib"]
+
+[dependencies]
+audiowaveform-core = { package = "audiowaveform", path = "../../../../crates/audiowaveform", default-features = false, features = ["decode"] }
+magnus = "0.8.2"
+rb-sys = { version = "0.9", features = ["stable-api-compiled-fallback"] }
+
+[build-dependencies]
+rb-sys-env = "0.2.2"

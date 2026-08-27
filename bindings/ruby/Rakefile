@@ -1,0 +1,42 @@
+# frozen_string_literal: true
+
+require "fileutils"
+require "rubygems/package"
+require "rake/testtask"
+require "rb_sys/extensiontask"
+
+REPOSITORY_ROOT = File.expand_path("../..", __dir__)
+GEMSPEC = Gem::Specification.load(File.join(REPOSITORY_ROOT, "audiowaveform.gemspec"))
+LOCAL_GEMSPEC = GEMSPEC.dup
+LOCAL_GEMSPEC.files = GEMSPEC.files.filter_map do |path|
+  path.delete_prefix("bindings/ruby/") if path.start_with?("bindings/ruby/")
+end
+LOCAL_GEMSPEC.require_paths = ["lib"]
+LOCAL_GEMSPEC.extensions = ["ext/audiowaveform/extconf.rb"]
+
+RbSys::ExtensionTask.new("audiowaveform-ruby", LOCAL_GEMSPEC) do |extension|
+  extension.lib_dir = "lib/audiowaveform"
+end
+
+Rake::TestTask.new(:test) do |test|
+  test.libs << File.expand_path("lib", __dir__)
+  test.pattern = File.expand_path("test/**/*_test.rb", __dir__)
+end
+
+task test: :compile
+
+desc "Validate the bundled RBS signature"
+task :rbs do
+  sh "bundle", "exec", "rbs", "-I", File.join(REPOSITORY_ROOT, "sig"), "validate"
+end
+
+desc "Build the source gem"
+task build: :compile do
+  package_directory = File.join(__dir__, "pkg")
+  FileUtils.mkdir_p(package_directory)
+
+  gem_file = Dir.chdir(REPOSITORY_ROOT) { Gem::Package.build(GEMSPEC) }
+  FileUtils.mv(File.join(REPOSITORY_ROOT, gem_file), package_directory)
+end
+
+task default: %i[compile test rbs]
